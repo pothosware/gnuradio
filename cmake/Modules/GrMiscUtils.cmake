@@ -154,6 +154,23 @@ function(GR_LIBRARY_FOO target)
     include_directories(${POTHOS_INCLUDE_DIRS})
     target_link_libraries(${target} ${POTHOS_LIBRARIES})
 
+    #generate, build, and install registration
+    add_custom_command(
+        OUTPUT ${target}_pothos_wrapper.cpp
+        DEPENDS ${target} ${CMAKE_SOURCE_DIR}/pothos/GrPothosUtil.py
+        COMMAND ${PYTHON_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/pothos/GrPothosUtil.py
+            ${target}_pothos_wrapper.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_BINARY_DIR}
+    )
+    POTHOS_MODULE_UTIL(
+        TARGET ${target}_wrapper
+        SOURCES ${target}_pothos_wrapper.cpp
+        LIBRARIES ${target}
+        DESTINATION gnuradio
+    )
+
     #parse the arguments for component names
     include(CMakeParseArgumentsCopy)
     CMAKE_PARSE_ARGUMENTS(GR_LIBRARY "" "RUNTIME_COMPONENT;DEVEL_COMPONENT" "" ${ARGN})
