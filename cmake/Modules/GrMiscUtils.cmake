@@ -155,9 +155,10 @@ function(GR_LIBRARY_FOO target)
     target_link_libraries(${target} ${POTHOS_LIBRARIES})
 
     #generate, build, and install registration
+    file(GLOB GrPothosUtils "${CMAKE_SOURCE_DIR}/pothos/*.*")
     add_custom_command(
         OUTPUT ${target}_pothos_wrapper.cpp
-        DEPENDS ${target} ${CMAKE_SOURCE_DIR}/pothos/GrPothosUtil.py
+        DEPENDS ${target} ${GrPothosUtils}
         COMMAND ${PYTHON_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/pothos/GrPothosUtil.py
             --out ${target}_pothos_wrapper.cpp
