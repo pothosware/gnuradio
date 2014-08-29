@@ -1,6 +1,9 @@
 ########################################################################
 ## The GrPothosUtil helps to bind GR blocks into the Pothos plugin tree
 ########################################################################
+import sys
+def warning(msg, *args): sys.stderr.write('\033[93m'+msg%args+"\n")
+def error(msg, *args): sys.stderr.write('\033[91m'+msg%args+"\n")
 
 ########################################################################
 ## single header inspection
@@ -42,12 +45,12 @@ def inspect_header(header_path):
 
     try: cppHeader = CppHeaderParser.CppHeader(contents, argType='string')
     except Exception as ex:
-        sys.stderr.write(str(ex))
+        warning('Inspect %s failed with %s', header_path, str(ex))
         return
 
     for className, classInfo in cppHeader.CLASSES.iteritems():
         if not is_this_class_a_block(classInfo): continue
-        yield (className, classInfo)
+        yield (className, classInfo, cppHeader)
 
 ########################################################################
 ## glob_recurse
@@ -83,45 +86,61 @@ def classInfoIntoRegistration(**kwargs):
 ########################################################################
 ## extract and process a single class
 ########################################################################
+MAX_ARGS = 8
+
 def create_block_path(className, classInfo):
     ns = classInfo['namespace']
     ns = ns.replace('::', '/')
     if ns: return '/' + ns + '/' + className
     else: return '/' + className
 
-def getFactoryInfo(className, classInfo):
-
-    factory_function_path = []
-    factory_function_args_types_names = []
-    factory_function_args_only_names = []
+def find_factory_function(className, classInfo, cppHeader):
 
     for method in classInfo['methods']['public']:
         if not method['static']: continue
         if 'make' not in method['name']: continue
+        return method
 
-        factory_function_path.append(className)
-        factory_function_path.append(method['name'])
+    for function in cppHeader.functions:
+        if 'make' not in function['name']: continue
+        return function
 
-        for param in method['parameters']:
-            if 'enum' in param['type']: print param
-            factory_function_args_types_names.append('%s %s'%(param['type'], param['name']))
-            factory_function_args_only_names.append(param['name'])
+    return None
 
-        break
+def find_block_methods(classInfo):
+    for method in classInfo['methods']['public']:
+        if method['static']: continue
+        if method['constructor']: continue
+        if method['destructor']: continue
+        if method['name'] in ('general_work', 'work', 'forecast'): continue
+        if len(method['parameters']) > MAX_ARGS:
+            warning("Too many parameters %s::%s ignored", classInfo['name'], method['name'])
+            continue
+        yield method
 
-    if not factory_function_path:
-        raise Exception('cant find factory function')
+def getFactoryInfo(className, classInfo, cppHeader):
+
+    #extract the factory method
+    factory = find_factory_function(className, classInfo, cppHeader)
+    if not factory:
+        raise Exception('Cant find factory function for %s'%className)
+    if len(factory['parameters']) > MAX_ARGS:
+        raise Exception('Too many factory parameters for %s'%className)
+    if 'parent' in factory: factory_path = [className, className, factory['name']]
+    else: factory_path = [factory['namespace'], factory['name']]
 
     return dict(
         namespace=classInfo['namespace'],
-        factory_function_path='::'.join(factory_function_path),
-        factory_function_args_types_names=', '.join(factory_function_args_types_names),
-        factory_function_args_only_names=', '.join(factory_function_args_only_names),
+        className=className,
+        factory_function_path='::'.join(factory_path),
+        factory_function_args_types_names=', '.join(['%s %s'%(p['type'], p['name']) for p in factory['parameters']]),
+        factory_function_args_only_names=', '.join([p['name'] for p in factory['parameters']]),
+        block_methods=find_block_methods(classInfo),
         path=create_block_path(className, classInfo),
         name=className
     )
 
-def getBlockInfoJSON(className, classInfo):
+def getBlockInfoJSON(className, classInfo, cppHeader):
     return dict(
         path=create_block_path(className, classInfo),
     )
@@ -145,12 +164,12 @@ if __name__ == '__main__':
     blockDescs = list()
     for tree_path in tree_paths:
         for header in glob_recurse(find_include_root(tree_path), "*.h"):
-            for className, classInfo in inspect_header(os.path.abspath(header)):
+            for className, classInfo, cppHeader in inspect_header(os.path.abspath(header)):
                 try:
-                    factories.append(getFactoryInfo(className, classInfo))
-                    blockDescs.append(getBlockInfoJSON(className, classInfo))
+                    factories.append(getFactoryInfo(className, classInfo, cppHeader))
+                    blockDescs.append(getBlockInfoJSON(className, classInfo, cppHeader))
                     headers.append(header)
-                except Exception as ex: sys.stderr.write(str(ex))
+                except Exception as ex: warning(str(ex))
 
     output = classInfoIntoRegistration(
         headers=set(headers),

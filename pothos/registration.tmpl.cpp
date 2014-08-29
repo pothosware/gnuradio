@@ -1,6 +1,9 @@
 //this is a machine generated file...
 
 \#include <Pothos/Framework.hpp>
+\#include <gnuradio/block.h>
+
+using namespace gr;
 
 /***********************************************************************
  * helpers
@@ -51,12 +54,17 @@ template<class T> boost::shared_ptr<T> to_boost_ptr(const std::shared_ptr<T> &p)
  **********************************************************************/
 #for $factory in $factories
 
-using namespace gr;
+#if $factory.namespace
 using namespace $factory.namespace;
+#end if
 
 static std::shared_ptr<Pothos::Block> factory__$(factory.name)($factory.factory_function_args_types_names)
 {
     auto block = $(factory.factory_function_path)($factory.factory_function_args_only_names);
+    #for $method in $factory.block_methods
+    block->registerCallable("$method.name", Pothos::Callable(&$factory.namespace::$factory.className::$method.name)
+        .bind(std::ref(*static_cast<$factory.namespace::$factory.className *>(block.get())), 0));
+    #end for
     return to_std_ptr(boost::dynamic_pointer_cast<Pothos::Block>(block));
 }
 
