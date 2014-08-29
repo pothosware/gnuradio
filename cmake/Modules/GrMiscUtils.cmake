@@ -129,12 +129,31 @@ function(GR_LIBTOOL)
 endfunction(GR_LIBTOOL)
 
 ########################################################################
+# Pothos setup
+########################################################################
+if (NOT POTHOS_MODULE_PATH)
+    set(POTHOS_MODULE_PATH "${CMAKE_INSTALL_PREFIX}/share/Pothos/cmake/Modules")
+endif()
+
+include(${POTHOS_MODULE_PATH}/PothosUtil.cmake)
+
+if(CMAKE_COMPILER_IS_GNUCXX)
+    #noisy warnings to avoid on every build
+    add_compile_options(-Wno-unused-parameter)
+endif()
+
+########################################################################
 # Do standard things to the library target
 # - set target properties
 # - make install rules
 # Also handle gnuradio custom naming conventions w/ extras mode.
 ########################################################################
 function(GR_LIBRARY_FOO target)
+
+    #add pothos to the build
+    include_directories(${POTHOS_INCLUDE_DIRS})
+    target_link_libraries(${target} ${POTHOS_LIBRARIES})
+
     #parse the arguments for component names
     include(CMakeParseArgumentsCopy)
     CMAKE_PARSE_ARGUMENTS(GR_LIBRARY "" "RUNTIME_COMPONENT;DEVEL_COMPONENT" "" ${ARGN})
