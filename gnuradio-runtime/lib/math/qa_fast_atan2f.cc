@@ -33,7 +33,7 @@
 #ifdef _MSC_VER
 #define isnan _isnan
 #else
-using std::isnan;
+//using std::isnan;
 #endif
 
 void
