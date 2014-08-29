@@ -147,7 +147,9 @@ namespace gr {
           d_SUBSHIFT = 0;
         }
 
-        yp_kernel = boost::assign::map_list_of("k=7r=2", volk_8u_x4_conv_k7_r2_8u);
+        //yp_kernel = boost::assign::map_list_of("k=7r=2", volk_8u_x4_conv_k7_r2_8u);
+        yp_kernel.clear();
+        yp_kernel["k=7r=2"] = volk_8u_x4_conv_k7_r2_8u;
 
         std::string k_ = "k=";
         std::string r_ = "r=";
