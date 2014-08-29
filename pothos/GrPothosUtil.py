@@ -41,7 +41,9 @@ def inspect_header(header_path):
     for tok in set(pp_tokens): contents = contents.replace(tok, '')
 
     try: cppHeader = CppHeaderParser.CppHeader(contents, argType='string')
-    except: return
+    except Exception as ex:
+        sys.stderr.write(str(ex))
+        return
 
     for className, classInfo in cppHeader.CLASSES.iteritems():
         if not is_this_class_a_block(classInfo): continue
@@ -88,7 +90,33 @@ def create_block_path(className, classInfo):
     else: return '/' + className
 
 def getFactoryInfo(className, classInfo):
+
+    factory_function_path = []
+    factory_function_args_types_names = []
+    factory_function_args_only_names = []
+
+    for method in classInfo['methods']['public']:
+        if not method['static']: continue
+        if 'make' not in method['name']: continue
+
+        factory_function_path.append(className)
+        factory_function_path.append(method['name'])
+
+        for param in method['parameters']:
+            if 'enum' in param['type']: print param
+            factory_function_args_types_names.append('%s %s'%(param['type'], param['name']))
+            factory_function_args_only_names.append(param['name'])
+
+        break
+
+    if not factory_function_path:
+        raise Exception('cant find factory function')
+
     return dict(
+        namespace=classInfo['namespace'],
+        factory_function_path='::'.join(factory_function_path),
+        factory_function_args_types_names=', '.join(factory_function_args_types_names),
+        factory_function_args_only_names=', '.join(factory_function_args_only_names),
         path=create_block_path(className, classInfo),
         name=className
     )
@@ -102,14 +130,15 @@ def getBlockInfoJSON(className, classInfo):
 ## main
 ########################################################################
 import sys
+from optparse import OptionParser
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
-        print('Usage: GrPothosUtil out.cpp paths/to/tree/with/includes')
-        exit(-1)
+    parser = OptionParser()
+    parser.add_option("--out", dest="out_path", help="write registration here")
+    (options, args) = parser.parse_args()
 
-    out_path = sys.argv[1]
-    tree_paths = sys.argv[2:]
+    out_path = options.out_path
+    tree_paths = args
 
     headers = list()
     factories = list()
@@ -117,12 +146,16 @@ if __name__ == '__main__':
     for tree_path in tree_paths:
         for header in glob_recurse(find_include_root(tree_path), "*.h"):
             for className, classInfo in inspect_header(os.path.abspath(header)):
-                factories.append(getFactoryInfo(className, classInfo))
-                blockDescs.append(getBlockInfoJSON(className, classInfo))
-                headers.append(header)
+                try:
+                    factories.append(getFactoryInfo(className, classInfo))
+                    blockDescs.append(getBlockInfoJSON(className, classInfo))
+                    headers.append(header)
+                except Exception as ex: sys.stderr.write(str(ex))
 
-    open(out_path, 'w').write(classInfoIntoRegistration(
+    output = classInfoIntoRegistration(
         headers=set(headers),
         factories=factories,
         blockDescs=blockDescs
-    ))
+    )
+    if out_path: open(out_path, 'w').write(output)
+    #else: print(output)
