@@ -1,6 +1,6 @@
 //this is a machine generated file...
 
-\#include <Pothos/Config.hpp>
+\#include <Pothos/Framework.hpp>
 
 /***********************************************************************
  * helpers
@@ -51,9 +51,13 @@ template<class T> boost::shared_ptr<T> to_boost_ptr(const std::shared_ptr<T> &p)
  **********************************************************************/
 #for $factory in $factories
 
-static Pothos::Block *factory__$(factory.name)(void)
+using namespace gr;
+using namespace $factory.namespace;
+
+static std::shared_ptr<Pothos::Block> factory__$(factory.name)($factory.factory_function_args_types_names)
 {
-    
+    auto block = $(factory.factory_function_path)($factory.factory_function_args_only_names);
+    return to_std_ptr(boost::dynamic_pointer_cast<Pothos::Block>(block));
 }
 
 static Pothos::BlockRegistry register__$(factory.name)("$factory.path", &factory__$(factory.name));

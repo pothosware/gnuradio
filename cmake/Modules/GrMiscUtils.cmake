@@ -160,7 +160,7 @@ function(GR_LIBRARY_FOO target)
         DEPENDS ${target} ${CMAKE_SOURCE_DIR}/pothos/GrPothosUtil.py
         COMMAND ${PYTHON_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/pothos/GrPothosUtil.py
-            ${target}_pothos_wrapper.cpp
+            --out ${target}_pothos_wrapper.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_BINARY_DIR}
     )
