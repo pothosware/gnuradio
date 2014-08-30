@@ -58,14 +58,16 @@ template<class T> boost::shared_ptr<T> to_boost_ptr(const std::shared_ptr<T> &p)
 using namespace $factory.namespace;
 #end if
 
-static std::shared_ptr<Pothos::Block> factory__$(factory.name)($factory.factory_function_args_types_names)
+static std::shared_ptr<Pothos::Block> factory__$(factory.name)($factory.exported_factory_args)
 {
-    auto block = $(factory.factory_function_path)($factory.factory_function_args_only_names);
+    auto __block = $(factory.factory_function_path)($factory.internal_factory_args);
+    #if $factory.block_methods
+    auto __block_ref = std::ref(*static_cast<$factory.namespace::$factory.className *>(__block.get()));
+    #end if
     #for $method in $factory.block_methods
-    block->registerCallable("$method.name", Pothos::Callable(&$factory.namespace::$factory.className::$method.name)
-        .bind(std::ref(*static_cast<$factory.namespace::$factory.className *>(block.get())), 0));
+    __block->registerCallable("$method.name", Pothos::Callable(&$factory.namespace::$factory.className::$method.name).bind(__block_ref, 0));
     #end for
-    return to_std_ptr(boost::dynamic_pointer_cast<Pothos::Block>(block));
+    return to_std_ptr(boost::dynamic_pointer_cast<Pothos::Block>(__block));
 }
 
 static Pothos::BlockRegistry register__$(factory.name)("$factory.path", &factory__$(factory.name));
