@@ -269,29 +269,7 @@ def find_block_methods(classInfo):
             continue
         yield method
 
-def getFactoryInfo(className, classInfo, cppHeader):
-
-    #extract the factory method
-    factory = find_factory_function(className, classInfo, cppHeader)
-    if not factory:
-        raise Exception('Cant find factory function for %s'%className)
-    if len(factory['parameters']) > MAX_ARGS:
-        raise Exception('Too many factory parameters for %s'%className)
-    if 'parent' in factory: factory_path = [className, className, factory['name']]
-    else: factory_path = [factory['namespace'], factory['name']]
-
-    return dict(
-        namespace=classInfo['namespace'],
-        className=className,
-        factory_function_path='::'.join(factory_path),
-        factory_function_args_types_names=', '.join(['%s %s'%(p['type'], p['name']) for p in factory['parameters']]),
-        factory_function_args_only_names=', '.join([p['name'] for p in factory['parameters']]),
-        block_methods=find_block_methods(classInfo),
-        path=create_block_path(className, classInfo),
-        name=className
-    )
-
-def getBlockInfoJSON(className, classInfo, cppHeader, blockData, key_to_categories):
+def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
 
     #extract GRC data as lists
     def get_as_list(data, key):
@@ -301,8 +279,60 @@ def getBlockInfoJSON(className, classInfo, cppHeader, blockData, key_to_categori
         return out
     grc_make = blockData['make']
     grc_params = get_as_list(blockData, 'param')
+    grc_param_keys = [p['key'] for p in grc_params]
     grc_callbacks = get_as_list(blockData, 'callback')
     grc_callbacks_str = ', '.join(grc_callbacks)
+
+    #extract the factory method
+    raw_factory = find_factory_function(className, classInfo, cppHeader)
+    if not raw_factory:
+        raise Exception('Cant find factory function for %s'%className)
+    if len(raw_factory['parameters']) > MAX_ARGS:
+        raise Exception('Too many factory parameters for %s'%className)
+    if 'parent' in raw_factory: factory_path = [className, className, raw_factory['name']]
+    else: factory_path = [raw_factory['namespace'], raw_factory['name']]
+
+    #determine calls (methods that arent getters)
+    raw_calls = list()
+    for method in find_block_methods(classInfo):
+        name = method['name']
+        if not method['parameters']: continue #ignore getters
+        if name not in grc_make and name not in grc_callbacks_str:
+            notice("method %s::%s not used in GRC", className, name)
+        else: raw_calls.append(method)
+
+    #map all factory and call params to a unique param key
+    fcn_param_to_key = dict()
+    for function in [raw_factory] + raw_calls:
+        for param in function['parameters']:
+            matches = difflib.get_close_matches(param['name'], grc_param_keys, n=1)
+            if not matches: matches = [param['name']]
+            fcn_param_to_key[(function['name'], param['name'])] = matches[0]
+
+    #for all keys in the factory that appear in a call
+    #then we only need to supply a default to the factory
+    exported_factory_args = list()
+    internal_factory_args = list()
+
+    for factory_param in raw_factory['parameters']:
+        factory_key = fcn_param_to_key[(raw_factory['name'], factory_param['name'])]
+        param_used_in_call = False
+        for call in raw_calls:
+            for call_param in call['parameters']:
+                if fcn_param_to_key[(call['name'], call_param['name'])] == factory_key:
+                    param_used_in_call = True
+
+        #file-based arguments are in general -- non-defaultable
+        if 'file' in factory_key.lower(): param_used_in_call = False
+
+        if param_used_in_call:
+            type_str = factory_param['type'].replace('&', '').replace('const', '').strip()
+            if type_str.startswith('unsigned ') or type_str.startswith('signed '):
+                type_str = type_str.split()[-1] #fixes unsigned int -> int, we dont want spaces
+            internal_factory_args.append('%s()'%type_str) #defaults it
+        else:
+            exported_factory_args.append('%s %s'%(factory_param['type'], factory_param['name']))
+            internal_factory_args.append(factory_param['name'])
 
     #determine params
     params = list()
@@ -312,11 +342,6 @@ def getBlockInfoJSON(className, classInfo, cppHeader, blockData, key_to_categori
 
     #calls (setters/initializers)
     calls = list()
-    for method in find_block_methods(classInfo):
-        name = method['name']
-        if not method['parameters']: continue #ignore getters
-        if name not in grc_make and name not in grc_callbacks_str:
-            notice("method %s::%s not used in GRC", className, name)
 
     #category extraction
     categories = list()
@@ -327,7 +352,18 @@ def getBlockInfoJSON(className, classInfo, cppHeader, blockData, key_to_categori
     if not categories: warning("Not block categories found: %s", className)
     categories = [c if c.startswith('/') else ('/'+c) for c in categories]
 
-    return dict(
+    factoryInfo = dict(
+        namespace=classInfo['namespace'],
+        className=className,
+        factory_function_path='::'.join(factory_path),
+        exported_factory_args=', '.join(exported_factory_args),
+        internal_factory_args=', '.join(internal_factory_args),
+        block_methods=list(find_block_methods(classInfo)),
+        path=create_block_path(className, classInfo),
+        name=className
+    )
+
+    blockDesc = dict(
         path=create_block_path(className, classInfo),
         keywords=[className, classInfo['namespace'], blockData['key']],
         name=blockData['name'],
@@ -337,6 +373,8 @@ def getBlockInfoJSON(className, classInfo, cppHeader, blockData, key_to_categori
         args=args, #factory function args
         docs=list(doxygenToDocLines(classInfo['doxygen'])),
     )
+
+    return factoryInfo, blockDesc
 
 ########################################################################
 ## main
@@ -378,8 +416,7 @@ if __name__ == '__main__':
         for className, classInfo, cppHeader, headerPath in header_data:
             try:
                 metadata = grc_data[getGrcFileMatch(className, classInfo, grc_data.keys())]['block']
-                factory = getFactoryInfo(className, classInfo, cppHeader)
-                blockDesc = getBlockInfoJSON(className, classInfo, cppHeader, metadata, key_to_categories)
+                factory, blockDesc = getBlockInfo(className, classInfo, cppHeader, metadata, key_to_categories)
                 #FIXME having an issue with POCO stringify and unicode chars
                 #just escape out the unicode escape for now to avoid issues...
                 blockDesc = (blockDesc['path'], json.dumps(blockDesc).replace('\\u', '\\\\u'))
