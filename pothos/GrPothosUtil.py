@@ -1,9 +1,47 @@
 ########################################################################
 ## The GrPothosUtil helps to bind GR blocks into the Pothos plugin tree
 ########################################################################
+
+########################################################################
+## debug messages for build verbose
+########################################################################
 import sys
+def message(msg, *args): pass
+#def message(msg, *args): sys.stderr.write('\033[92m'+msg%args+"\n")
 def warning(msg, *args): sys.stderr.write('\033[93m'+msg%args+"\n")
 def error(msg, *args): sys.stderr.write('\033[91m'+msg%args+"\n")
+
+########################################################################
+## blacklists -- hopefully we can fix in the future
+########################################################################
+TARGET_BLACKLIST = [
+    'gnuradio-runtime', #no blocks here
+    'gnuradio-pmt', #no blocks here
+    'gnuradio-qtgui', #compiler errors with binding functions -- fix later
+]
+
+NAMESPACE_BLACKLIST = [
+]
+
+CLASS_BLACKLIST = [
+    'gr::blocks::multiply_matrix_cc', #causing weird linker error -- symbol missing why?
+]
+
+########################################################################
+## directory and file utils
+########################################################################
+import fnmatch
+import os
+
+def glob_recurse(base, filt):
+    for root, dirnames, filenames in os.walk(base):
+      for filename in fnmatch.filter(filenames, filt):
+          yield os.path.join(root, filename)
+
+def find_dir_root(path, dirname):
+    if os.path.dirname(path) == path: raise Exception('find_dir_root FAIL')
+    if dirname in os.listdir(path): return os.path.join(path, dirname)
+    return find_dir_root(os.path.dirname(path), dirname)
 
 ########################################################################
 ## single header inspection
@@ -25,13 +63,24 @@ def fix_KNOWN_BASES():
         yield 'gr::'+base
 KNOWN_BASES = list(fix_KNOWN_BASES())
 
-def is_this_class_a_block(classInfo):
+def is_this_class_a_block(className, classInfo):
+
+    if classInfo['namespace'] in NAMESPACE_BLACKLIST:
+        warning('Blacklisted namespace: %s', classInfo['namespace'])
+        return False
+
+    fully_qualified = classInfo['namespace']+'::'+className
+    if fully_qualified in CLASS_BLACKLIST:
+        warning('Blacklisted class: %s', fully_qualified)
+        return False
+
     for inherit in classInfo['inherits']:
         if inherit['access'] != 'public': return False
         if inherit['class'] in KNOWN_BASES: return True
     return False
 
 def inspect_header(header_path):
+    message('Inspecting: %s', header_path)
     contents = open(header_path).read()
 
     #remove API decl tokens so the lexer doesnt have to
@@ -49,29 +98,15 @@ def inspect_header(header_path):
         return
 
     for className, classInfo in cppHeader.CLASSES.iteritems():
-        if not is_this_class_a_block(classInfo): continue
+        if not is_this_class_a_block(className, classInfo): continue
+        message('  Found: %s::%s', classInfo['namespace'], className)
         yield (className, classInfo, cppHeader)
 
-########################################################################
-## glob_recurse
-########################################################################
-import fnmatch
-import os
-
-def glob_recurse(base, filt):
-    for root, dirnames, filenames in os.walk(base):
-      for filename in fnmatch.filter(filenames, filt):
-          yield os.path.join(root, filename)
-
-########################################################################
-## find include root
-########################################################################
-import os
-
-def find_include_root(path):
-    if os.path.dirname(path) == path: raise Exception('find_include_root FAIL')
-    if 'include' in os.listdir(path): return os.path.join(path, 'include')
-    return find_include_root(os.path.dirname(path))
+def gather_header_data(tree_paths):
+    for tree_path in tree_paths:
+        for header in glob_recurse(find_dir_root(tree_path, 'include'), "*.h"):
+            for className, classInfo, cppHeader in inspect_header(os.path.abspath(header)):
+                yield className, classInfo, cppHeader, header
 
 ########################################################################
 ## class info into a C++ source
@@ -82,6 +117,56 @@ from Cheetah import Template
 def classInfoIntoRegistration(**kwargs):
     tmpl_str = open(REGISTRATION_TMPL_FILE, 'r').read()
     return str(Template.Template(tmpl_str, kwargs))
+
+########################################################################
+## gather grc data
+########################################################################
+import xmltodict
+import difflib
+import copy
+
+def gather_grc_data(tree_paths):
+    for tree_path in tree_paths:
+        for xml_file in glob_recurse(find_dir_root(tree_path, 'grc'), "*.xml"):
+            yield os.path.basename(xml_file), xmltodict.parse(open(xml_file).read())
+
+def getGrcFileMatch(className, classInfo, grc_files):
+
+    attempt0 = difflib.get_close_matches(word=className, possibilities=grc_files, n=1)
+    if attempt0: return attempt0[0]
+
+    qualified_name = classInfo['namespace'].replace('::', '_')+'_'+className
+    if qualified_name.startswith('gr_'): qualified_name = qualified_name[3:]
+    attempt1 = difflib.get_close_matches(word=qualified_name, possibilities=grc_files, n=1)
+    if attempt1: return attempt1[0]
+
+    raise Exception('Cant find GRC match for %s'%className)
+
+def grcCategoryRecurse(data, names=[]):
+    if 'name' in data and data['name']:
+        names.append(data['name'])
+
+    if 'block' in data:
+        blocks = data['block']
+        if not isinstance(blocks, list): blocks = [blocks]
+        for block in blocks: yield block, names
+
+    if 'cat' in data:
+        cats = data['cat']
+        if not isinstance(cats, list): cats = [cats]
+        for cat in cats:
+            for x in grcCategoryRecurse(cat, copy.copy(names)): yield x
+
+def grcBlockKeyToCategoryMap(grc_data):
+    key_to_categories = dict()
+    for file_name, data in grc_data.iteritems():
+        if 'cat' not in data: continue
+        for blockKey, catNames in grcCategoryRecurse(data['cat']):
+            catName = '/'.join(catNames)
+            if blockKey not in key_to_categories:
+                key_to_categories[blockKey] = list()
+            key_to_categories[blockKey].append(catName)
+    return key_to_categories
 
 ########################################################################
 ## extract and process a single class
@@ -140,9 +225,28 @@ def getFactoryInfo(className, classInfo, cppHeader):
         name=className
     )
 
-def getBlockInfoJSON(className, classInfo, cppHeader):
+def getBlockInfoJSON(className, classInfo, cppHeader, blockData, key_to_categories):
+
+    #determine params
+
+    #factory
+
+    #calls (setters/initializers)
+
+    #category extraction
+    categories = list()
+    try: categories.append(blockData['category'])
+    except KeyError: pass
+    try: categories.extend(key_to_categories[blockData['key']])
+    except KeyError: pass
+    if not categories: warning("Not block categories found: %s", className)
+    categories = [c if c.startswith('/') else ('/'+c) for c in categories]
+
     return dict(
         path=create_block_path(className, classInfo),
+        keywords=[className, classInfo['namespace']],
+        name=blockData['name'],
+        categories=categories,
     )
 
 ########################################################################
@@ -152,29 +256,52 @@ import sys
 from optparse import OptionParser
 
 if __name__ == '__main__':
-    parser = OptionParser()
-    parser.add_option("--out", dest="out_path", help="write registration here")
-    (options, args) = parser.parse_args()
 
+    #parse the input arguments
+    parser = OptionParser()
+    parser.add_option("--out", dest="out_path", help="output file path or 'stdout'")
+    parser.add_option("--target", help="associated cmake library target name")
+    (options, args) = parser.parse_args()
     out_path = options.out_path
     tree_paths = args
 
+    #generator information
     headers = list()
     factories = list()
     blockDescs = list()
-    for tree_path in tree_paths:
-        for header in glob_recurse(find_include_root(tree_path), "*.h"):
-            for className, classInfo, cppHeader in inspect_header(os.path.abspath(header)):
-                try:
-                    factories.append(getFactoryInfo(className, classInfo, cppHeader))
-                    blockDescs.append(getBlockInfoJSON(className, classInfo, cppHeader))
-                    headers.append(header)
-                except Exception as ex: warning(str(ex))
 
+    #warning blacklist for issues
+    if options.target in TARGET_BLACKLIST:
+        warning('Blacklisted target: %s', options.target)
+
+    #otherwise continue to parse
+    else:
+        #extract grc metadata
+        grc_data = dict(gather_grc_data(tree_paths))
+        key_to_categories = grcBlockKeyToCategoryMap(grc_data)
+
+        #extract header data
+        header_data = gather_header_data(tree_paths)
+
+        #extract info for each block class
+        for className, classInfo, cppHeader, headerPath in header_data:
+            try:
+                metadata = grc_data[getGrcFileMatch(className, classInfo, grc_data.keys())]['block']
+                factory = getFactoryInfo(className, classInfo, cppHeader)
+                blockDesc = getBlockInfoJSON(className, classInfo, cppHeader, metadata, key_to_categories)
+                factories.append(factory)
+                blockDescs.append(blockDesc)
+                headers.append(headerPath)
+            except Exception as ex: warning(str(ex))
+
+    #generate output source
     output = classInfoIntoRegistration(
         headers=set(headers),
         factories=factories,
         blockDescs=blockDescs
     )
-    if out_path: open(out_path, 'w').write(output)
-    #else: print(output)
+
+    #send output to file or stdout
+    if out_path:
+        if out_path == 'stdout': print(output)
+        else: open(out_path, 'w').write(output)

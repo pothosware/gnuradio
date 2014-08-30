@@ -162,6 +162,7 @@ function(GR_LIBRARY_FOO target)
         COMMAND ${PYTHON_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/pothos/GrPothosUtil.py
             --out ${target}_pothos_wrapper.cpp
+            --target ${target}
             ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_BINARY_DIR}
     )
