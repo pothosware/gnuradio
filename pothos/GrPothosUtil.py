@@ -17,6 +17,7 @@ def header(msg, *args): sys.stderr.write(HEADER+msg%args+"\n")
 def notice(msg, *args): sys.stderr.write(OKGREEN+msg%args+"\n")
 def warning(msg, *args): sys.stderr.write(WARNING+msg%args+"\n")
 def error(msg, *args): sys.stderr.write(FAIL+msg%args+"\n")
+def blacklist(msg, *args): sys.stderr.write(OKBLUE+msg%args+"\n")
 
 ########################################################################
 ## blacklists -- hopefully we can fix in the future
@@ -32,6 +33,7 @@ NAMESPACE_BLACKLIST = [
 
 CLASS_BLACKLIST = [
     'gr::blocks::multiply_matrix_cc', #causing weird linker error -- symbol missing why?
+    'gr::blocks::multiply_matrix_ff', #causing runtime memory corruption error
 ]
 
 ########################################################################
@@ -73,12 +75,12 @@ KNOWN_BASES = list(fix_KNOWN_BASES())
 def is_this_class_a_block(className, classInfo):
 
     if classInfo['namespace'] in NAMESPACE_BLACKLIST:
-        warning('Blacklisted namespace: %s', classInfo['namespace'])
+        blacklist('Blacklisted namespace: %s', classInfo['namespace'])
         return False
 
     fully_qualified = classInfo['namespace']+'::'+className
     if fully_qualified in CLASS_BLACKLIST:
-        warning('Blacklisted class: %s', fully_qualified)
+        blacklist('Blacklisted class: %s', fully_qualified)
         return False
 
     for inherit in classInfo['inherits']:
@@ -173,6 +175,66 @@ def grcBlockKeyToCategoryMap(grc_data):
     return key_to_categories
 
 ########################################################################
+## doxygen to qt html
+########################################################################
+import cgi
+
+def doxygenToDocLines(doxygen):
+    in_ul_list = False
+
+    for doxyline in doxygen.splitlines():
+        doxyline = cgi.escape(doxyline)
+
+        #strip the front comment chars
+        def front_strip(line, key):
+            if line.startswith(key+' '): return line[len(key)+1:]
+            if line.startswith(key): return line[len(key):]
+            return line
+        for begin in ('/*!', '*/', '//!', '//', '*'): doxyline = front_strip(doxyline, begin)
+        for begin in ('\\brief', '\\details', '\\ingroup'): doxyline = front_strip(doxyline, begin)
+
+        #unordered list support
+        encountered_li = False
+        if doxyline.startswith('\\li'):
+            doxyline = doxyline.replace('\\li', '<li>') + '</li>'
+            encountered_li = True
+
+        #deal with adding ul tags
+        if encountered_li and not in_ul_list:
+            in_ul_list = True
+            doxyline = '<ul>' + doxyline
+        if in_ul_list and not encountered_li:
+            in_ul_list = False
+            doxyline = doxyline + '</ul>'
+
+        #bold tags
+        if doxyline.startswith('\\b'): doxyline = doxyline.replace('\\b', '<b>') + '</b>'
+
+        #code blocks
+        if doxyline.startswith('\\code'): doxyline = doxyline.replace('\\code', '<code>')
+        if doxyline.startswith('\\endcode'): doxyline = doxyline.replace('\\endcode', '</code>')
+
+        #formulas -- just do preformatted text for now
+        if doxyline.startswith('\\f['): doxyline = doxyline.replace('\\f[', '<pre>')
+        if doxyline.startswith('\\f]'): doxyline = doxyline.replace('\\f]', '</pre>')
+        if '\\f$' in doxyline:
+            doxyline = doxyline.replace('\\f$', '<pre>', 1)
+            doxyline = doxyline.replace('\\f$', '</pre>', 1)
+
+        #references -- put in italics
+        if doxyline.startswith('\\sa'): doxyline = doxyline.replace('\\sa', '<i>') + '</i>'
+
+        #sections -- become headings
+        if doxyline.startswith('\\section'): doxyline = doxyline.replace('\\section', '<h2>') + '</h2>'
+        if doxyline.startswith('\\subsection'): doxyline = doxyline.replace('\\subsection', '<h3>') + '</h3>'
+
+        #ignore \p
+        doxyline = doxyline.replace('\\p', '')
+
+        if doxyline.startswith('\\'): warning('doxyparse unknown field %s', doxyline)
+        yield doxyline
+
+########################################################################
 ## extract and process a single class
 ########################################################################
 MAX_ARGS = 8
@@ -229,56 +291,6 @@ def getFactoryInfo(className, classInfo, cppHeader):
         name=className
     )
 
-def doxygenToDocLines(doxygen):
-    in_ul_list = False
-
-    for doxyline in doxygen.splitlines():
-
-        #strip the front comment chars
-        def front_strip(line, key):
-            if line.startswith(key+' '): return line[len(key)+1:]
-            if line.startswith(key): return line[len(key):]
-            return line
-        for begin in ('/*!', '*/', '//!', '//', '*'): doxyline = front_strip(doxyline, begin)
-        for begin in ('\\brief', '\\details', '\\ingroup'): doxyline = front_strip(doxyline, begin)
-
-        #unordered list support
-        encountered_li = False
-        if doxyline.startswith('\\li'):
-            doxyline = doxyline.replace('\\li', '<li>') + '</li>'
-            encountered_li = True
-
-        #deal with adding ul tags
-        if encountered_li and not in_ul_list:
-            in_ul_list = True
-            doxyline = '<ul>' + doxyline
-        if in_ul_list and not encountered_li:
-            in_ul_list = False
-            doxyline = doxyline + '</ul>'
-
-        #bold tags
-        if doxyline.startswith('\\b'): doxyline = doxyline.replace('\\b', '<b>') + '</b>'
-
-        #code blocks
-        if doxyline.startswith('\\code'): doxyline = doxyline.replace('\\code', '<code>')
-        if doxyline.startswith('\\endcode'): doxyline = doxyline.replace('\\endcode', '</code>')
-
-        #formulas -- just do preformatted text for now
-        if doxyline.startswith('\\f['): doxyline = doxyline.replace('\\f[', '<pre>')
-        if doxyline.startswith('\\f]'): doxyline = doxyline.replace('\\f]', '</pre>')
-        if doxyline.startswith('\\f$'): doxyline = doxyline.replace('\\f$', '<pre>') + '</pre>'
-
-        #references -- put in italics
-        if doxyline.startswith('\\sa'): doxyline = doxyline.replace('\\sa', '<i>') + '</i>'
-
-        #sections -- become headings
-        if doxyline.startswith('\\section'): doxyline = doxyline.replace('\\section', '<h2>') + '</h2>'
-        if doxyline.startswith('\\subsection'): doxyline = doxyline.replace('\\subsection', '<h3>') + '</h3>'
-        if doxyline.startswith('\\p'): doxyline = doxyline.replace('\\p', '<h4>') + '</h4>'
-
-        if doxyline.startswith('\\'): warning('doxyparse unknown field %s', doxyline)
-        yield doxyline
-
 def getBlockInfoJSON(className, classInfo, cppHeader, blockData, key_to_categories):
 
     #extract GRC data as lists
@@ -317,7 +329,7 @@ def getBlockInfoJSON(className, classInfo, cppHeader, blockData, key_to_categori
 
     return dict(
         path=create_block_path(className, classInfo),
-        keywords=[className, classInfo['namespace']],
+        keywords=[className, classInfo['namespace'], blockData['key']],
         name=blockData['name'],
         categories=categories,
         calls=calls, #setters list
@@ -351,7 +363,7 @@ if __name__ == '__main__':
 
     #warning blacklist for issues
     if options.target in TARGET_BLACKLIST:
-        warning('Blacklisted target: %s', options.target)
+        blacklist('Blacklisted target: %s', options.target)
 
     #otherwise continue to parse
     else:
