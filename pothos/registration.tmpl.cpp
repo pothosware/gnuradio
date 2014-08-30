@@ -79,9 +79,8 @@ static Pothos::BlockRegistry register__$(factory.name)("$factory.path", &factory
 
 pothos_static_block(registerGrPothosUtilBlockDocs)
 {
-    #for $blockDesc in $blockDescs
-    #import json
-    #set $escaped = ''.join([hex(ord(ch)).replace('0x', '\\x') for ch in json.dumps($blockDesc)])
-    Pothos::PluginRegistry::add("/blocks/docs$blockDesc.path", std::string("$escaped"));
+    #for $path, $blockDesc in $blockDescs
+    #set $escaped = ''.join([hex(ord(ch)).replace('0x', '\\x') for ch in $blockDesc])
+    Pothos::PluginRegistry::add("/blocks/docs$path", std::string("$escaped"));
     #end for
 }

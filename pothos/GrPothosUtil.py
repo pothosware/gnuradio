@@ -5,11 +5,18 @@
 ########################################################################
 ## debug messages for build verbose
 ########################################################################
+HEADER = '\033[95m'
+OKBLUE = '\033[94m'
+OKGREEN = '\033[92m'
+WARNING = '\033[93m'
+FAIL = '\033[91m'
+ENDC = '\033[0m'
+
 import sys
-def message(msg, *args): pass
-#def message(msg, *args): sys.stderr.write('\033[92m'+msg%args+"\n")
-def warning(msg, *args): sys.stderr.write('\033[93m'+msg%args+"\n")
-def error(msg, *args): sys.stderr.write('\033[91m'+msg%args+"\n")
+def header(msg, *args): sys.stderr.write(HEADER+msg%args+"\n")
+def notice(msg, *args): sys.stderr.write(OKGREEN+msg%args+"\n")
+def warning(msg, *args): sys.stderr.write(WARNING+msg%args+"\n")
+def error(msg, *args): sys.stderr.write(FAIL+msg%args+"\n")
 
 ########################################################################
 ## blacklists -- hopefully we can fix in the future
@@ -80,7 +87,7 @@ def is_this_class_a_block(className, classInfo):
     return False
 
 def inspect_header(header_path):
-    message('Inspecting: %s', header_path)
+    #notice('Inspecting: %s', header_path)
     contents = open(header_path).read()
 
     #remove API decl tokens so the lexer doesnt have to
@@ -99,7 +106,7 @@ def inspect_header(header_path):
 
     for className, classInfo in cppHeader.CLASSES.iteritems():
         if not is_this_class_a_block(className, classInfo): continue
-        message('  Found: %s::%s', classInfo['namespace'], className)
+        #notice('  Found: %s::%s', classInfo['namespace'], className)
         yield (className, classInfo, cppHeader)
 
 def gather_header_data(tree_paths):
@@ -132,13 +139,10 @@ def gather_grc_data(tree_paths):
 
 def getGrcFileMatch(className, classInfo, grc_files):
 
-    attempt0 = difflib.get_close_matches(word=className, possibilities=grc_files, n=1)
-    if attempt0: return attempt0[0]
-
     qualified_name = classInfo['namespace'].replace('::', '_')+'_'+className
     if qualified_name.startswith('gr_'): qualified_name = qualified_name[3:]
-    attempt1 = difflib.get_close_matches(word=qualified_name, possibilities=grc_files, n=1)
-    if attempt1: return attempt1[0]
+    matches = difflib.get_close_matches(word=qualified_name, possibilities=grc_files, n=1)
+    if matches: return matches[0]
 
     raise Exception('Cant find GRC match for %s'%className)
 
@@ -225,13 +229,82 @@ def getFactoryInfo(className, classInfo, cppHeader):
         name=className
     )
 
+def doxygenToDocLines(doxygen):
+    in_ul_list = False
+
+    for doxyline in doxygen.splitlines():
+
+        #strip the front comment chars
+        def front_strip(line, key):
+            if line.startswith(key+' '): return line[len(key)+1:]
+            if line.startswith(key): return line[len(key):]
+            return line
+        for begin in ('/*!', '*/', '//!', '//', '*'): doxyline = front_strip(doxyline, begin)
+        for begin in ('\\brief', '\\details', '\\ingroup'): doxyline = front_strip(doxyline, begin)
+
+        #unordered list support
+        encountered_li = False
+        if doxyline.startswith('\\li'):
+            doxyline = doxyline.replace('\\li', '<li>') + '</li>'
+            encountered_li = True
+
+        #deal with adding ul tags
+        if encountered_li and not in_ul_list:
+            in_ul_list = True
+            doxyline = '<ul>' + doxyline
+        if in_ul_list and not encountered_li:
+            in_ul_list = False
+            doxyline = doxyline + '</ul>'
+
+        #bold tags
+        if doxyline.startswith('\\b'): doxyline = doxyline.replace('\\b', '<b>') + '</b>'
+
+        #code blocks
+        if doxyline.startswith('\\code'): doxyline = doxyline.replace('\\code', '<code>')
+        if doxyline.startswith('\\endcode'): doxyline = doxyline.replace('\\endcode', '</code>')
+
+        #formulas -- just do preformatted text for now
+        if doxyline.startswith('\\f['): doxyline = doxyline.replace('\\f[', '<pre>')
+        if doxyline.startswith('\\f]'): doxyline = doxyline.replace('\\f]', '</pre>')
+        if doxyline.startswith('\\f$'): doxyline = doxyline.replace('\\f$', '<pre>') + '</pre>'
+
+        #references -- put in italics
+        if doxyline.startswith('\\sa'): doxyline = doxyline.replace('\\sa', '<i>') + '</i>'
+
+        #sections -- become headings
+        if doxyline.startswith('\\section'): doxyline = doxyline.replace('\\section', '<h2>') + '</h2>'
+        if doxyline.startswith('\\subsection'): doxyline = doxyline.replace('\\subsection', '<h3>') + '</h3>'
+        if doxyline.startswith('\\p'): doxyline = doxyline.replace('\\p', '<h4>') + '</h4>'
+
+        if doxyline.startswith('\\'): warning('doxyparse unknown field %s', doxyline)
+        yield doxyline
+
 def getBlockInfoJSON(className, classInfo, cppHeader, blockData, key_to_categories):
 
+    #extract GRC data as lists
+    def get_as_list(data, key):
+        try: out = data[key]
+        except KeyError: out = list()
+        if not isinstance(out, list): out = [out]
+        return out
+    grc_make = blockData['make']
+    grc_params = get_as_list(blockData, 'param')
+    grc_callbacks = get_as_list(blockData, 'callback')
+    grc_callbacks_str = ', '.join(grc_callbacks)
+
     #determine params
+    params = list()
 
     #factory
+    args = list()
 
     #calls (setters/initializers)
+    calls = list()
+    for method in find_block_methods(classInfo):
+        name = method['name']
+        if not method['parameters']: continue #ignore getters
+        if name not in grc_make and name not in grc_callbacks_str:
+            notice("method %s::%s not used in GRC", className, name)
 
     #category extraction
     categories = list()
@@ -247,12 +320,17 @@ def getBlockInfoJSON(className, classInfo, cppHeader, blockData, key_to_categori
         keywords=[className, classInfo['namespace']],
         name=blockData['name'],
         categories=categories,
+        calls=calls, #setters list
+        params=params, #parameters list
+        args=args, #factory function args
+        docs=list(doxygenToDocLines(classInfo['doxygen'])),
     )
 
 ########################################################################
 ## main
 ########################################################################
 import sys
+import json
 from optparse import OptionParser
 
 if __name__ == '__main__':
@@ -264,6 +342,7 @@ if __name__ == '__main__':
     (options, args) = parser.parse_args()
     out_path = options.out_path
     tree_paths = args
+    header("GrPothosUtil begin: target=%s, out=%s", options.target, out_path)
 
     #generator information
     headers = list()
@@ -289,6 +368,9 @@ if __name__ == '__main__':
                 metadata = grc_data[getGrcFileMatch(className, classInfo, grc_data.keys())]['block']
                 factory = getFactoryInfo(className, classInfo, cppHeader)
                 blockDesc = getBlockInfoJSON(className, classInfo, cppHeader, metadata, key_to_categories)
+                #FIXME having an issue with POCO stringify and unicode chars
+                #just escape out the unicode escape for now to avoid issues...
+                blockDesc = (blockDesc['path'], json.dumps(blockDesc).replace('\\u', '\\\\u'))
                 factories.append(factory)
                 blockDescs.append(blockDesc)
                 headers.append(headerPath)
