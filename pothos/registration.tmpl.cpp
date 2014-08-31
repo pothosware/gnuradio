@@ -50,10 +50,9 @@ template<class T> boost::shared_ptr<T> to_boost_ptr(const std::shared_ptr<T> &p)
 #end for
 
 /***********************************************************************
- * register block factories
+ * create block factories
  **********************************************************************/
 #for $factory in $factories
-
 #if $factory.namespace
 using namespace $factory.namespace;
 #end if
@@ -69,9 +68,27 @@ static std::shared_ptr<Pothos::Block> factory__$(factory.name)($factory.exported
     #end for
     return to_std_ptr(boost::dynamic_pointer_cast<Pothos::Block>(__block));
 }
+#end for
 
-static Pothos::BlockRegistry register__$(factory.name)("$factory.path", &factory__$(factory.name));
+/***********************************************************************
+ * meta block factories
+ **********************************************************************/
+#for $factory in $meta_factories
+static std::shared_ptr<Pothos::Block> factory__$(factory.name)($factory.exported_factory_args)
+{
+    #for $sub_factory in $factory.sub_factories
+    if ($factory.type_key == "$sub_factory.name") return factory__$(sub_factory.name)($sub_factory.internal_factory_args);
+    #end for
 
+    throw Pothos::RuntimeException("$(factory.name) unknown type: "+$factory.type_key);
+}
+#end for
+
+/***********************************************************************
+ * register block factories
+ **********************************************************************/
+#for $registration in $registrations
+static Pothos::BlockRegistry register__$(registration.name)("$registration.path", &factory__$(registration.name));
 #end for
 
 /***********************************************************************
@@ -81,7 +98,7 @@ static Pothos::BlockRegistry register__$(factory.name)("$factory.path", &factory
 
 pothos_static_block(registerGrPothosUtilBlockDocs)
 {
-    #for $path, $blockDesc in $blockDescs
+    #for $path, $blockDesc in $blockDescs.iteritems()
     #set $escaped = ''.join([hex(ord(ch)).replace('0x', '\\x') for ch in $blockDesc])
     Pothos::PluginRegistry::add("/blocks/docs$path", std::string("$escaped"));
     #end for
