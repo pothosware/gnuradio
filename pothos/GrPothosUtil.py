@@ -348,6 +348,7 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
     #then we only need to supply a default to the factory
     exported_factory_args = list()
     internal_factory_args = list()
+    used_factory_parameters = list()
     for factory_param in raw_factory['parameters']:
         factory_key = fcn_param_to_key[(raw_factory['name'], factory_param['name'])]
         param_used_in_call = False
@@ -367,6 +368,7 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
         else:
             exported_factory_args.append('%s %s'%(factory_param['type'], factory_param['name']))
             internal_factory_args.append(factory_param['name'])
+            used_factory_parameters.append(factory_param)
 
     #determine params
     params = list()
@@ -389,12 +391,18 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
         params.append(param_d)
 
     #factory
-    #TODO
     args = list()
+    for param in used_factory_parameters:
+        args.append(fcn_param_to_key[(raw_factory['name'], param['name'])])
 
     #calls (setters/initializers)
-    #TODO
     calls = list()
+    for function in raw_calls:
+        call_type = 'setter' if function['name'] in grc_callbacks_str else 'initializer'
+        call_d = dict(name=function['name'], args=list(), type=call_type)
+        for param in function['parameters']:
+            call_d['args'].append(fcn_param_to_key[(function['name'], param['name'])])
+        calls.append(call_d)
 
     #category extraction
     categories = list()
@@ -408,6 +416,7 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
     factoryInfo = dict(
         namespace=classInfo['namespace'],
         className=className,
+        used_factory_parameters=used_factory_parameters,
         factory_function_path='::'.join(factory_path),
         exported_factory_args=', '.join(exported_factory_args),
         internal_factory_args=', '.join(internal_factory_args),
@@ -428,6 +437,45 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
     )
 
     return factoryInfo, blockDesc
+
+def createMetaBlockInfo(grc_file, info):
+
+    #create a new type parameter for the new block desc
+    type_param = None
+    for param in get_as_list(grc_data[grc_file]['block'], 'param'):
+        if 'type' in param['key'].lower(): type_param = param
+    if not type_param: raise Exception('bad association -- '+grc_data[grc_file]['block']['key'])
+    param_d = dict(key=type_param['key'], name=type_param['name'], preview='disable', options=list())
+    for factory, blockDesc in info: param_d['options'].append(dict(
+        name=factory['name'].replace('_', ' ').title(), key=factory['name']))
+
+    #create new block desc
+    metaBlockDesc = copy.deepcopy(info[0][1]) #copy first block desc
+    metaBlockDesc['args'].insert(0, param_d['key'])
+    metaBlockDesc['params'].insert(0, param_d)
+    assert('_' in metaBlockDesc['path'])
+    metaBlockDesc['path'] = metaBlockDesc['path'].rsplit('_', 1)[0]
+
+    #subfactories for meta factory
+    sub_factories = list()
+    for factory, blockDesc in info:
+        internal_factory_args = ['a%d.convert<%s>()'%(i, p['type']) for i, p in enumerate(factory['used_factory_parameters'])]
+        sub_factories.append(dict(
+            name=factory['name'], internal_factory_args=', '.join(internal_factory_args)))
+
+    #create metafactory
+    metaFactoryArgs = ['const std::string &%s'%param_d['key']]
+    metaFactoryArgs += ['const Pothos::Object &a%d'%i for i in range(len(metaBlockDesc['args'])-1)]
+    metaFactory = dict(
+        type_key=param_d['key'],
+        name=grc_file,
+        path=metaBlockDesc['path'],
+        exported_factory_args=', '.join(metaFactoryArgs),
+        sub_factories=sub_factories,
+    )
+
+    return metaFactory, metaBlockDesc
+
 
 ########################################################################
 ## main
@@ -450,6 +498,8 @@ if __name__ == '__main__':
     #generator information
     headers = list()
     factories = list()
+    meta_factories = list()
+    registrations = list()
     blockDescs = list()
 
     #warning blacklist for issues
@@ -473,31 +523,36 @@ if __name__ == '__main__':
                 factory, blockDesc = getBlockInfo(className, classInfo, cppHeader, grc_data[file_name]['block'], key_to_categories)
                 if file_name not in grc_file_to_meta_group: grc_file_to_meta_group[file_name] = list()
                 grc_file_to_meta_group[file_name].append((factory, blockDesc))
-                #FIXME having an issue with POCO stringify and unicode chars
-                #just escape out the unicode escape for now to avoid issues...
                 headers.append(headerPath)
             except Exception as ex: warning(str(ex))
 
         #determine meta-block grouping -- one file to many keys
         for grc_file, info in grc_file_to_meta_group.iteritems():
             if len(info) > 1:
-                #param_d = dict(key='type', name='Data Type')
-                type_found = ''
-                for param in get_as_list(grc_data[grc_file]['block'], 'param'):
-                    if 'type' in param['key'].lower(): type_found = param['key']
-                if not type_found:
-                    error('bad association -- %s', grc_data[grc_file]['block']['key'])
-                    #print '----------->', type_found
-            for factory, blockDesc in info:
-                blockDesc = (blockDesc['path'], json.dumps(blockDesc).replace('\\u', '\\\\u'))
-                factories.append(factory)
-                blockDescs.append(blockDesc)
+                try:
+                    metaFactory, metaBlockDesc = createMetaBlockInfo(grc_file, info)
+                    blockDescs.append(metaBlockDesc)
+                    for factory, blockDesc in info:
+                        factories.append(factory)
+                    meta_factories.append(metaFactory)
+                    registrations.append(metaFactory) #uses keys: name and path
+
+                except Exception as ex: error(str(ex))
+            else:
+                for factory, blockDesc in info:
+                    factories.append(factory)
+                    registrations.append(factory) #uses keys: name and path
+                    blockDescs.append(blockDesc)
 
     #generate output source
     output = classInfoIntoRegistration(
         headers=set(headers),
         factories=factories,
-        blockDescs=blockDescs
+        meta_factories=meta_factories,
+        registrations=registrations,
+        #FIXME having an issue with POCO stringify and unicode chars
+        #just escape out the unicode escape for now to avoid issues...
+        blockDescs=dict([(desc['path'], json.dumps(desc).replace('\\u', '\\\\u')) for desc in blockDescs]),
     )
 
     #send output to file or stdout
