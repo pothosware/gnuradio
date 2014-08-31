@@ -137,14 +137,24 @@ import copy
 def gather_grc_data(tree_paths):
     for tree_path in tree_paths:
         for xml_file in glob_recurse(find_dir_root(tree_path, 'grc'), "*.xml"):
-            yield os.path.basename(xml_file), xmltodict.parse(open(xml_file).read())
+            yield os.path.splitext(os.path.basename(xml_file))[0], xmltodict.parse(open(xml_file).read())
 
 def getGrcFileMatch(className, classInfo, grc_files):
 
     qualified_name = classInfo['namespace'].replace('::', '_')+'_'+className
     if qualified_name.startswith('gr_'): qualified_name = qualified_name[3:]
-    matches = difflib.get_close_matches(word=qualified_name, possibilities=grc_files, n=1)
-    if matches: return matches[0]
+
+    #extract match?
+    if qualified_name in grc_files: return qualified_name
+
+    #make xxx* multi match
+    def has_trailing_dtype(s): return '_' in s and s.split('_')[-1].isalnum() and len(s.split('_')[-1]) <= 3
+    if has_trailing_dtype(qualified_name):
+        for grc_file in grc_files: #ignore trailing end on compare
+            if has_trailing_dtype(grc_file) and grc_file.split('_')[:-1] == qualified_name.split('_')[:-1]: return grc_file
+
+        for grc_file in grc_files: #ignore trailing end on source
+            if has_trailing_dtype(grc_file) and grc_file.split('_') == qualified_name.split('_')[:-1]: return grc_file
 
     raise Exception('Cant find GRC match for %s'%className)
 
@@ -269,17 +279,43 @@ def find_block_methods(classInfo):
             continue
         yield method
 
+def match_function_param_to_key(function, argno, param, grc_make, grc_callbacks, grc_params, isFactory):
+
+    def strip_off_nonalnum(s):
+        out = ''
+        for ch in s:
+            if ch == '_' or ch.isalnum(): out += ch
+            else: break
+        return out
+
+    #TODO look through the make for a call to this function and inspect its args
+
+    #inspect callbacks for function matches to see if the param is the same
+    if not isFactory:
+        for callback in grc_callbacks:
+            if function['name'] in callback:
+                guts = callback.split(function['name'], 1)[1]
+                args = map(strip_off_nonalnum, guts.split('$'))
+                if args and not args[0]: args = args[1:]
+                if len(args) == len(function['parameters']):
+                    return args[argno]
+
+    #lazy: get closest match or make a new param key
+    matches = difflib.get_close_matches(param['name'], grc_params.keys(), n=1)
+    if not matches: matches = [param['name']]
+    return matches[0]
+
+def get_as_list(data, key):
+    try: out = data[key]
+    except KeyError: out = list()
+    if not isinstance(out, list): out = [out]
+    return out
+
 def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
 
     #extract GRC data as lists
-    def get_as_list(data, key):
-        try: out = data[key]
-        except KeyError: out = list()
-        if not isinstance(out, list): out = [out]
-        return out
     grc_make = blockData['make']
-    grc_params = get_as_list(blockData, 'param')
-    grc_param_keys = [p['key'] for p in grc_params]
+    grc_params = dict([(p['key'], p) for p in get_as_list(blockData, 'param')])
     grc_callbacks = get_as_list(blockData, 'callback')
     grc_callbacks_str = ', '.join(grc_callbacks)
 
@@ -298,22 +334,20 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
         name = method['name']
         if not method['parameters']: continue #ignore getters
         if name not in grc_make and name not in grc_callbacks_str:
-            notice("method %s::%s not used in GRC", className, name)
+            notice("method %s::%s not used in GRC %s", className, name, blockData['key'])
         else: raw_calls.append(method)
 
     #map all factory and call params to a unique param key
     fcn_param_to_key = dict()
     for function in [raw_factory] + raw_calls:
-        for param in function['parameters']:
-            matches = difflib.get_close_matches(param['name'], grc_param_keys, n=1)
-            if not matches: matches = [param['name']]
-            fcn_param_to_key[(function['name'], param['name'])] = matches[0]
+        for i, param in enumerate(function['parameters']):
+            fcn_param_to_key[(function['name'], param['name'])] = match_function_param_to_key(
+                function, i, param, grc_make, grc_callbacks, grc_params, function==raw_factory)
 
     #for all keys in the factory that appear in a call
     #then we only need to supply a default to the factory
     exported_factory_args = list()
     internal_factory_args = list()
-
     for factory_param in raw_factory['parameters']:
         factory_key = fcn_param_to_key[(raw_factory['name'], factory_param['name'])]
         param_used_in_call = False
@@ -336,11 +370,30 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
 
     #determine params
     params = list()
+    for param_key in set(fcn_param_to_key.values()):
+        param_d = dict(key=param_key)
+        if param_key in grc_params:
+            try: param_d['name'] = grc_params[param_key]['name']
+            except KeyError: pass
+            try: param_d['default'] = grc_params[param_key]['value']
+            except KeyError: pass
+            if 'hide' in grc_params[param_key]: param_d['preview'] = 'disable'
+            param_type = grc_params[param_key]['type']
+            if param_type == 'string': param_d['widgetType'] = 'StringEntry'
+            if param_type == 'int': param_d['widgetType'] = 'SpinBox'
+            options = get_as_list(grc_params[param_key], 'option')
+            if options:
+                param_d['options'] = options
+                param_d['widgetType'] = 'ComboBox'
+                param_d['widgetKwargs'] = dict(editable=param_type != 'enum')
+        params.append(param_d)
 
     #factory
+    #TODO
     args = list()
 
     #calls (setters/initializers)
+    #TODO
     calls = list()
 
     #category extraction
@@ -413,17 +466,32 @@ if __name__ == '__main__':
         header_data = gather_header_data(tree_paths)
 
         #extract info for each block class
+        grc_file_to_meta_group = dict()
         for className, classInfo, cppHeader, headerPath in header_data:
             try:
-                metadata = grc_data[getGrcFileMatch(className, classInfo, grc_data.keys())]['block']
-                factory, blockDesc = getBlockInfo(className, classInfo, cppHeader, metadata, key_to_categories)
+                file_name = getGrcFileMatch(className, classInfo, grc_data.keys())
+                factory, blockDesc = getBlockInfo(className, classInfo, cppHeader, grc_data[file_name]['block'], key_to_categories)
+                if file_name not in grc_file_to_meta_group: grc_file_to_meta_group[file_name] = list()
+                grc_file_to_meta_group[file_name].append((factory, blockDesc))
                 #FIXME having an issue with POCO stringify and unicode chars
                 #just escape out the unicode escape for now to avoid issues...
+                headers.append(headerPath)
+            except Exception as ex: warning(str(ex))
+
+        #determine meta-block grouping -- one file to many keys
+        for grc_file, info in grc_file_to_meta_group.iteritems():
+            if len(info) > 1:
+                #param_d = dict(key='type', name='Data Type')
+                type_found = ''
+                for param in get_as_list(grc_data[grc_file]['block'], 'param'):
+                    if 'type' in param['key'].lower(): type_found = param['key']
+                if not type_found:
+                    error('bad association -- %s', grc_data[grc_file]['block']['key'])
+                    #print '----------->', type_found
+            for factory, blockDesc in info:
                 blockDesc = (blockDesc['path'], json.dumps(blockDesc).replace('\\u', '\\\\u'))
                 factories.append(factory)
                 blockDescs.append(blockDesc)
-                headers.append(headerPath)
-            except Exception as ex: warning(str(ex))
 
     #generate output source
     output = classInfoIntoRegistration(
