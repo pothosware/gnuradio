@@ -385,7 +385,7 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
             if param_type == 'int': param_d['widgetType'] = 'SpinBox'
             options = get_as_list(grc_params[param_key], 'option')
             if options:
-                param_d['options'] = options
+                param_d['options'] = [dict(name=o['name'], value='"%s"'%o['key']) for o in options]
                 param_d['widgetType'] = 'ComboBox'
                 param_d['widgetKwargs'] = dict(editable=param_type != 'enum')
         params.append(param_d)
@@ -447,7 +447,8 @@ def createMetaBlockInfo(grc_file, info):
     if not type_param: raise Exception('bad association -- '+grc_data[grc_file]['block']['key'])
     param_d = dict(key=type_param['key'], name=type_param['name'], preview='disable', options=list())
     for factory, blockDesc in info: param_d['options'].append(dict(
-        name=factory['name'].replace('_', ' ').title(), key=factory['name']))
+        name=factory['name'].replace('_', ' ').title(), value='"%s"'%factory['name']))
+        #TODO option names could take hint in some cases by matching suffix to the opt 'fcn' key
 
     #create new block desc
     metaBlockDesc = copy.deepcopy(info[0][1]) #copy first block desc
