@@ -423,3 +423,5 @@ install(
     DESTINATION ${GR_INCLUDE_DIR}/gnuradio
     COMPONENT "runtime_devel"
 )
+
+install(DIRECTORY GrPothosUtil DESTINATION share/gnuradio COMPONENT "runtime_devel")
