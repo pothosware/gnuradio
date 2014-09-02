@@ -13,11 +13,11 @@ FAIL = '\033[91m'
 ENDC = '\033[0m'
 
 import sys
-def header(msg, *args): sys.stderr.write(HEADER+msg%args+"\n")
-def notice(msg, *args): sys.stderr.write(OKGREEN+msg%args+"\n")
-def warning(msg, *args): sys.stderr.write(WARNING+msg%args+"\n")
-def error(msg, *args): sys.stderr.write(FAIL+msg%args+"\n")
-def blacklist(msg, *args): sys.stderr.write(OKBLUE+msg%args+"\n")
+def header(msg, *args): sys.stderr.write(HEADER+msg%args+"\n"+ENDC)
+def notice(msg, *args): sys.stderr.write(OKGREEN+msg%args+"\n"+ENDC)
+def warning(msg, *args): sys.stderr.write(WARNING+msg%args+"\n"+ENDC)
+def error(msg, *args): sys.stderr.write(FAIL+msg%args+"\n"+ENDC)
+def blacklist(msg, *args): sys.stderr.write(OKBLUE+msg%args+"\n"+ENDC)
 
 ########################################################################
 ## blacklists -- hopefully we can fix in the future
@@ -59,6 +59,8 @@ import sys
 import os
 sys.path.append(os.path.dirname(__file__))
 import CppHeaderParser
+
+DISCOVERED_ENUMS = list()
 
 KNOWN_BASES = [
     'block',
@@ -105,6 +107,8 @@ def inspect_header(header_path):
     except Exception as ex:
         warning('Inspect %s failed with %s', header_path, str(ex))
         return
+
+    DISCOVERED_ENUMS.extend(cppHeader.enums)
 
     for className, classInfo in cppHeader.CLASSES.iteritems():
         if not is_this_class_a_block(className, classInfo): continue
@@ -247,6 +251,7 @@ def doxygenToDocLines(doxygen):
 ########################################################################
 ## extract and process a single class
 ########################################################################
+from collections import OrderedDict
 MAX_ARGS = 8
 
 def create_block_path(className, classInfo):
@@ -315,7 +320,7 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
 
     #extract GRC data as lists
     grc_make = blockData['make']
-    grc_params = dict([(p['key'], p) for p in get_as_list(blockData, 'param')])
+    grc_params = OrderedDict([(p['key'], p) for p in get_as_list(blockData, 'param')])
     grc_callbacks = get_as_list(blockData, 'callback')
     grc_callbacks_str = ', '.join(grc_callbacks)
 
@@ -323,8 +328,6 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
     raw_factory = find_factory_function(className, classInfo, cppHeader)
     if not raw_factory:
         raise Exception('Cant find factory function for %s'%className)
-    if len(raw_factory['parameters']) > MAX_ARGS:
-        raise Exception('Too many factory parameters for %s'%className)
     if 'parent' in raw_factory: factory_path = [className, className, raw_factory['name']]
     else: factory_path = [raw_factory['namespace'], raw_factory['name']]
 
@@ -339,10 +342,14 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
 
     #map all factory and call params to a unique param key
     fcn_param_to_key = dict()
+    param_key_to_type = dict()
     for function in [raw_factory] + raw_calls:
         for i, param in enumerate(function['parameters']):
-            fcn_param_to_key[(function['name'], param['name'])] = match_function_param_to_key(
+            param_key = match_function_param_to_key(
                 function, i, param, grc_make, grc_callbacks, grc_params, function==raw_factory)
+            fcn_param_to_key[(function['name'], param['name'])] = param_key
+            param_key_to_type[param_key] = param['type']
+    all_param_keys = set(fcn_param_to_key.values())
 
     #for all keys in the factory that appear in a call
     #then we only need to supply a default to the factory
@@ -371,29 +378,45 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
             used_factory_parameters.append(factory_param)
 
     #determine params
+    #first get the ones seen in the grc params
+    #then do the ones that were found otherwise
     params = list()
-    for param_key in set(fcn_param_to_key.values()):
+    for param_key in grc_params.keys():
+        if param_key not in all_param_keys: continue
         param_d = dict(key=param_key)
-        if param_key in grc_params:
-            try: param_d['name'] = grc_params[param_key]['name']
-            except KeyError: pass
-            try: param_d['default'] = grc_params[param_key]['value']
-            except KeyError: pass
-            if 'hide' in grc_params[param_key]: param_d['preview'] = 'disable'
-            param_type = grc_params[param_key]['type']
-            if param_type == 'string': param_d['widgetType'] = 'StringEntry'
-            if param_type == 'int': param_d['widgetType'] = 'SpinBox'
-            options = get_as_list(grc_params[param_key], 'option')
-            if options:
-                param_d['options'] = [dict(name=o['name'], value='"%s"'%o['key']) for o in options]
-                param_d['widgetType'] = 'ComboBox'
-                param_d['widgetKwargs'] = dict(editable=param_type != 'enum')
+        try: param_d['name'] = grc_params[param_key]['name']
+        except KeyError: pass
+        try: param_d['default'] = grc_params[param_key]['value']
+        except KeyError: pass
+        if 'hide' in grc_params[param_key]: param_d['preview'] = 'disable'
+        param_type = grc_params[param_key]['type']
+        if param_type == 'string': param_d['widgetType'] = 'StringEntry'
+        if param_type == 'int': param_d['widgetType'] = 'SpinBox'
+        options = get_as_list(grc_params[param_key], 'option')
+        if options:
+            param_d['options'] = [dict(name=o['name'], value='"%s"'%o['key']) for o in options]
+            param_d['widgetType'] = 'ComboBox'
+            param_d['widgetKwargs'] = dict(editable=param_type != 'enum')
         params.append(param_d)
+    for param_key in all_param_keys:
+        if param_key in grc_params: continue
+        params.append(dict(key=param_key))
+
+    #use enum options in fcn type in known enums
+    for param_d in params:
+        if param_d['key'] not in all_param_keys: continue
+        for enum in DISCOVERED_ENUMS:
+            if enum['name'] in param_key_to_type[param_d['key']]:
+                param_d['options'] = list()
+                for value in enum['values']:
+                    param_d['options'].append(dict(name=value['name'], value='"%s"'%value['name']))
 
     #factory
     args = list()
     for param in used_factory_parameters:
         args.append(fcn_param_to_key[(raw_factory['name'], param['name'])])
+    if len(args) > MAX_ARGS:
+        raise Exception('Too many factory parameters for %s'%className)
 
     #calls (setters/initializers)
     calls = list()
@@ -524,8 +547,8 @@ if __name__ == '__main__':
                 factory, blockDesc = getBlockInfo(className, classInfo, cppHeader, grc_data[file_name]['block'], key_to_categories)
                 if file_name not in grc_file_to_meta_group: grc_file_to_meta_group[file_name] = list()
                 grc_file_to_meta_group[file_name].append((factory, blockDesc))
-                headers.append(headerPath)
             except Exception as ex: warning(str(ex))
+            headers.append(headerPath)
 
         #determine meta-block grouping -- one file to many keys
         for grc_file, info in grc_file_to_meta_group.iteritems():
@@ -548,6 +571,7 @@ if __name__ == '__main__':
     #generate output source
     output = classInfoIntoRegistration(
         headers=set(headers),
+        enums=DISCOVERED_ENUMS,
         factories=factories,
         meta_factories=meta_factories,
         registrations=registrations,
