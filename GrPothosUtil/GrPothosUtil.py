@@ -468,10 +468,20 @@ def createMetaBlockInfo(grc_file, info):
     for param in get_as_list(grc_data[grc_file]['block'], 'param'):
         if 'type' in param['key'].lower(): type_param = param
     if not type_param: raise Exception('bad association -- '+grc_data[grc_file]['block']['key'])
+
+    #make dict of <opt>fcn:type_suffix</opt>
+    fcn_type_key_to_name = dict()
+    for option in get_as_list(type_param, 'option'):
+        for opt in get_as_list(option, 'opt'):
+            if opt.startswith('fcn:'): fcn_type_key_to_name[opt[4:]] = option['name']
+
+    #create the param and fill in options
     param_d = dict(key=type_param['key'], name=type_param['name'], preview='disable', options=list())
-    for factory, blockDesc in info: param_d['options'].append(dict(
-        name=factory['name'].replace('_', ' ').title(), value='"%s"'%factory['name']))
-        #TODO option names could take hint in some cases by matching suffix to the opt 'fcn' key
+    for factory, blockDesc in info:
+        name = factory['name'].replace('_', ' ').title()
+        matches = difflib.get_close_matches(factory['name'].split('_')[-1], fcn_type_key_to_name.keys(), n=1)
+        if matches: name = fcn_type_key_to_name[matches[0]]
+        param_d['options'].append(dict(name=name, value='"%s"'%factory['name']))
 
     #create new block desc
     metaBlockDesc = copy.deepcopy(info[0][1]) #copy first block desc

@@ -156,18 +156,18 @@ function(GR_LIBRARY_FOO target)
 
     #determine GrPothosUtil directory
     if(EXISTS ${CMAKE_SOURCE_DIR}/GrPothosUtil)
-        set(GR_POTHOS_UTIL_DIR ${CMAKE_SOURCE_DIR})
+        set(GR_POTHOS_UTIL_DIR ${CMAKE_SOURCE_DIR}/GrPothosUtil)
     else()
-        set(GR_POTHOS_UTIL_DIR ${CMAKE_INSTALL_PREFIX}/share/gnuradio)
+        set(GR_POTHOS_UTIL_DIR ${CMAKE_INSTALL_PREFIX}/share/gnuradio/GrPothosUtil)
     endif()
 
     #generate, build, and install registration
-    file(GLOB GrPothosUtils "${CMAKE_SOURCE_DIR}/pothos/*.*")
+    file(GLOB GrPothosUtils "${GR_POTHOS_UTIL_DIR}/*.*")
     add_custom_command(
         OUTPUT ${target}_pothos_wrapper.cpp
         DEPENDS ${target} ${GrPothosUtils}
         COMMAND ${PYTHON_EXECUTABLE}
-            ${GR_POTHOS_UTIL_DIR}/GrPothosUtil/GrPothosUtil.py
+            ${GR_POTHOS_UTIL_DIR}/GrPothosUtil.py
             --out ${target}_pothos_wrapper.cpp
             --target ${target}
             ${CMAKE_CURRENT_SOURCE_DIR}
