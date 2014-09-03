@@ -487,9 +487,10 @@ def createMetaBlockInfo(grc_file, info):
         if 'type' in param['key'].lower(): type_param = param
     if not type_param: raise Exception('bad association -- '+grc_data[grc_file]['block']['key'])
 
-    #make dict of <opt>fcn:type_suffix</opt>
+    #make dict of <opt>fcn:type_suffix</opt> or use key if fcn not found
     fcn_type_key_to_name = dict()
     for option in get_as_list(type_param, 'option'):
+        fcn_type_key_to_name[option['key']] = option['name']
         for opt in get_as_list(option, 'opt'):
             if opt.startswith('fcn:'): fcn_type_key_to_name[opt[4:]] = option['name']
 
