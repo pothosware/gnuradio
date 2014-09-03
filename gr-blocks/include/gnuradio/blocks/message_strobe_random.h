@@ -32,11 +32,11 @@ namespace gr {
    /*
     * strobing models
     */
-   enum message_strobe_random_distribution_t {
+   typedef enum {
         STROBE_POISSON=1,
         STROBE_GAUSSIAN=2,
         STROBE_UNIFORM=3
-    };
+        } message_strobe_random_distribution_t;
 
     /*!
      * \brief Send message at defined interval

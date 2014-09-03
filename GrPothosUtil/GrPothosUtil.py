@@ -61,6 +61,7 @@ sys.path.append(os.path.dirname(__file__))
 import CppHeaderParser
 
 DISCOVERED_ENUMS = list()
+ENUM_HEADERS = list()
 
 KNOWN_BASES = [
     'block',
@@ -73,6 +74,43 @@ def fix_KNOWN_BASES():
         yield base
         yield 'gr::'+base
 KNOWN_BASES = list(fix_KNOWN_BASES())
+
+def tokenSplit(source):
+    tok = ''
+    for ch in source:
+        if ch.isalnum() or ch == '_': tok += ch
+        else:
+            if tok: yield tok
+            tok = ''
+            yield ch
+    if tok: yield tok
+
+#the lexer can only handle C++ style enums
+def reWriteEnums(source):
+    out = list()
+    typedefIndex = -1
+    enumIndex = -1
+    enumNameIndex = -1
+    openBracketIndex = -1
+    closeBracketIndex = -1
+    for i, tok in enumerate(tokenSplit(source)):
+        out.append(tok)
+        if typedefIndex == -1 and tok == 'typedef': typedefIndex = i
+        elif typedefIndex != -1 and enumIndex == -1 and tok == 'enum': enumIndex = i
+        elif enumIndex != -1 and openBracketIndex == -1 and len(tok) > 1: enumNameIndex = i
+        elif enumIndex != -1 and openBracketIndex == -1 and tok == '{': openBracketIndex = i
+        elif openBracketIndex != -1 and closeBracketIndex == -1 and tok == '}': closeBracketIndex = i
+        elif enumIndex != -1 and typedefIndex != -1 and openBracketIndex != -1 and closeBracketIndex != -1 and len(tok) > 1:
+            if enumNameIndex != -1: out[enumNameIndex] = ''
+            out[typedefIndex] = 'enum'
+            out[enumIndex] = tok
+            out[i] = ''
+            typedefIndex = -1
+            enumIndex = -1
+            enumNameIndex = -1
+            openBracketIndex = -1
+            closeBracketIndex = -1
+    return ''.join(out)
 
 def is_this_class_a_block(className, classInfo):
 
@@ -103,23 +141,30 @@ def inspect_header(header_path):
             if api_decl.isupper(): pp_tokens.append(api_decl)
     for tok in set(pp_tokens): contents = contents.replace(tok, '')
 
+    #rewrite typedef enums for the lexer into c++ style
+    contents = reWriteEnums(contents)
+
     try: cppHeader = CppHeaderParser.CppHeader(contents, argType='string')
     except Exception as ex:
         warning('Inspect %s failed with %s', header_path, str(ex))
         return
 
-    DISCOVERED_ENUMS.extend(cppHeader.enums)
+    if cppHeader.enums:
+        ENUM_HEADERS.append(header_path)
+        DISCOVERED_ENUMS.extend(cppHeader.enums)
 
-    for className, classInfo in cppHeader.CLASSES.iteritems():
-        if not is_this_class_a_block(className, classInfo): continue
-        #notice('  Found: %s::%s', classInfo['namespace'], className)
-        yield (className, classInfo, cppHeader)
+    return header_path, cppHeader
 
 def gather_header_data(tree_paths):
     for tree_path in tree_paths:
         for header in glob_recurse(find_dir_root(tree_path, 'include'), "*.h"):
-            for className, classInfo, cppHeader in inspect_header(os.path.abspath(header)):
-                yield className, classInfo, cppHeader, header
+            yield inspect_header(os.path.abspath(header))
+
+def query_block_classes(cppHeader):
+    for className, classInfo in cppHeader.CLASSES.iteritems():
+        if not is_this_class_a_block(className, classInfo): continue
+        #notice('  Found: %s::%s', classInfo['namespace'], className)
+        yield (className, classInfo)
 
 ########################################################################
 ## class info into a C++ source
@@ -428,6 +473,7 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
                 param_d['options'] = list()
                 for value in enum['values']:
                     param_d['options'].append(dict(name=value['name'], value='"%s"'%value['name']))
+                if param_d['options'] and 'default' in param_d: del param_d['default'] #let gui pick automatic default
 
     #factory
     args = list()
@@ -571,16 +617,17 @@ if __name__ == '__main__':
 
         #extract info for each block class
         grc_file_to_meta_group = dict()
-        for className, classInfo, cppHeader, headerPath in header_data:
-            try:
-                file_name = getGrcFileMatch(className, classInfo, grc_data.keys())
-                factory, blockDesc = getBlockInfo(className, classInfo, cppHeader, grc_data[file_name]['block'], key_to_categories)
-                if file_name not in grc_file_to_meta_group: grc_file_to_meta_group[file_name] = list()
-                grc_file_to_meta_group[file_name].append((factory, blockDesc))
-            except Exception as ex:
-                warning(str(ex))
-                #print traceback.format_exc()
-            headers.append(headerPath)
+        for headerPath, cppHeader in header_data:
+            for className, classInfo in query_block_classes(cppHeader):
+                try:
+                    file_name = getGrcFileMatch(className, classInfo, grc_data.keys())
+                    factory, blockDesc = getBlockInfo(className, classInfo, cppHeader, grc_data[file_name]['block'], key_to_categories)
+                    if file_name not in grc_file_to_meta_group: grc_file_to_meta_group[file_name] = list()
+                    grc_file_to_meta_group[file_name].append((factory, blockDesc))
+                    headers.append(headerPath) #include header on success
+                except Exception as ex:
+                    warning('%s: %s', options.target, str(ex))
+                    #print traceback.format_exc()
 
         #determine meta-block grouping -- one file to many keys
         for grc_file, info in grc_file_to_meta_group.iteritems():
@@ -602,7 +649,7 @@ if __name__ == '__main__':
 
     #generate output source
     output = classInfoIntoRegistration(
-        headers=set(headers),
+        headers=set(headers+ENUM_HEADERS),
         enums=DISCOVERED_ENUMS,
         factories=factories,
         meta_factories=meta_factories,
