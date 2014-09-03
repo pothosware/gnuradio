@@ -23,6 +23,7 @@
 #ifndef INCLUDED_GR_BASIC_BLOCK_H
 #define INCLUDED_GR_BASIC_BLOCK_H
 
+#include <Pothos/Framework/Block.hpp>
 #include <gnuradio/api.h>
 #include <gnuradio/sptr_magic.h>
 #include <gnuradio/msg_accepter.h>
@@ -56,6 +57,7 @@ namespace gr {
    * processing functions.
    */
   class GR_RUNTIME_API basic_block : public msg_accepter,
+                                     public Pothos::Block,
                                      public boost::enable_shared_from_this<basic_block>
   {
     typedef boost::function<void(pmt::pmt_t)> msg_handler_t;
