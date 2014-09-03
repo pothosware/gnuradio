@@ -80,6 +80,8 @@ void gr::block::work(void)
 {
     const auto &workInfo = Pothos::Block::workInfo();
 
+    if (workInfo.minElements == 0) return;
+
     //grab all of the messages
 
     //grab all of the labels
@@ -88,15 +90,32 @@ void gr::block::work(void)
     std::vector<int> ninput_items(this->inputs().size());
     for (size_t i = 0; i < ninput_items.size(); i++)
     {
+        this->input(i)->setReserve(d_history+1);
         ninput_items[i] = this->input(i)->elements();
     }
 
+    //perform the forecast input loop
+    int noutput_items = workInfo.minOutElements;
+    std::vector<int> forecast_items(this->inputs().size());
+    while (noutput_items > 0)
+    {
+        this->forecast(noutput_items, forecast_items);
+        for (size_t i = 0; i < ninput_items.size(); i++)
+        {
+            if (forecast_items[i] > ninput_items[i])
+            {
+                noutput_items -= 1;
+                goto forecast_again;
+            }
+        }
+        break;
+        forecast_again: continue;
+    }
+
     //call into general work with the available buffers
-    std::cout << "general_work "<<workInfo.minOutElements<<"\n";
-    int ret = this->general_work(workInfo.minOutElements, ninput_items,
+    int ret = this->general_work(noutput_items, ninput_items,
         const_cast<gr_vector_const_void_star &>(workInfo.inputPointers),
         const_cast<gr_vector_void_star &>(workInfo.outputPointers));
-    std::cout << "general_work ret "<<ret<<"\n";
 
     //when ret is positive it means produce this much on all indexed output ports
     if (ret > 0) for (auto output : Pothos::Block::outputs()) output->produce(size_t(ret));
