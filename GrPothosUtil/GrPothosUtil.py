@@ -316,6 +316,23 @@ def get_as_list(data, key):
     if not isinstance(out, list): out = [out]
     return out
 
+def fromGrcParam(grc_param):
+    param_d = dict(key=grc_param['key'])
+    try: param_d['name'] = grc_param['name']
+    except KeyError: pass
+    try: param_d['default'] = grc_param['value']
+    except KeyError: pass
+    if 'hide' in grc_param: param_d['preview'] = 'disable'
+    param_type = grc_param['type']
+    if param_type == 'string': param_d['widgetType'] = 'StringEntry'
+    if param_type == 'int': param_d['widgetType'] = 'SpinBox'
+    options = get_as_list(grc_param, 'option')
+    if options:
+        param_d['options'] = [dict(name=o['name'], value='"%s"'%o['key']) for o in options]
+        param_d['widgetType'] = 'ComboBox'
+        param_d['widgetKwargs'] = dict(editable=param_type != 'enum')
+    return param_d
+
 def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
 
     #extract GRC data as lists
@@ -377,27 +394,28 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
             internal_factory_args.append(factory_param['name'])
             used_factory_parameters.append(factory_param)
 
+    #determine nports
+    nports_calls = list()
+    for sink in get_as_list(blockData, 'sink'):
+        if 'nports' not in sink: continue
+        nports = sink['nports'].replace('$', '')
+        if nports in grc_params:
+            all_param_keys.add(nports)
+            nports_calls.append(dict(args=[nports], name="__setNumInputs", type='initializer'))
+    for source in get_as_list(blockData, 'source'):
+        if 'nports' not in source: continue
+        nports = source['nports'].replace('$', '')
+        if nports in grc_params:
+            all_param_keys.add(nports)
+            nports_calls.append(dict(args=[nports], name="__setNumOutputs", type='initializer'))
+
     #determine params
     #first get the ones seen in the grc params
     #then do the ones that were found otherwise
     params = list()
     for param_key in grc_params.keys():
         if param_key not in all_param_keys: continue
-        param_d = dict(key=param_key)
-        try: param_d['name'] = grc_params[param_key]['name']
-        except KeyError: pass
-        try: param_d['default'] = grc_params[param_key]['value']
-        except KeyError: pass
-        if 'hide' in grc_params[param_key]: param_d['preview'] = 'disable'
-        param_type = grc_params[param_key]['type']
-        if param_type == 'string': param_d['widgetType'] = 'StringEntry'
-        if param_type == 'int': param_d['widgetType'] = 'SpinBox'
-        options = get_as_list(grc_params[param_key], 'option')
-        if options:
-            param_d['options'] = [dict(name=o['name'], value='"%s"'%o['key']) for o in options]
-            param_d['widgetType'] = 'ComboBox'
-            param_d['widgetKwargs'] = dict(editable=param_type != 'enum')
-        params.append(param_d)
+        params.append(fromGrcParam(grc_params[param_key]))
     for param_key in all_param_keys:
         if param_key in grc_params: continue
         params.append(dict(key=param_key))
@@ -406,7 +424,7 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
     for param_d in params:
         if param_d['key'] not in all_param_keys: continue
         for enum in DISCOVERED_ENUMS:
-            if enum['name'] in param_key_to_type[param_d['key']]:
+            if param_d['key'] in param_key_to_type and enum['name'] in param_key_to_type[param_d['key']]:
                 param_d['options'] = list()
                 for value in enum['values']:
                     param_d['options'].append(dict(name=value['name'], value='"%s"'%value['name']))
@@ -453,7 +471,7 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
         keywords=[className, classInfo['namespace'], blockData['key']],
         name=blockData['name'],
         categories=categories,
-        calls=calls, #setters list
+        calls=calls+nports_calls, #calls list
         params=params, #parameters list
         args=args, #factory function args
         docs=list(doxygenToDocLines(classInfo['doxygen'])),
@@ -516,6 +534,7 @@ def createMetaBlockInfo(grc_file, info):
 ########################################################################
 import sys
 import json
+import traceback
 from optparse import OptionParser
 
 if __name__ == '__main__':
@@ -557,7 +576,9 @@ if __name__ == '__main__':
                 factory, blockDesc = getBlockInfo(className, classInfo, cppHeader, grc_data[file_name]['block'], key_to_categories)
                 if file_name not in grc_file_to_meta_group: grc_file_to_meta_group[file_name] = list()
                 grc_file_to_meta_group[file_name].append((factory, blockDesc))
-            except Exception as ex: warning(str(ex))
+            except Exception as ex:
+                warning(str(ex))
+                #print traceback.format_exc()
             headers.append(headerPath)
 
         #determine meta-block grouping -- one file to many keys
