@@ -72,6 +72,7 @@ GR_INCLUDE_SUBDIRECTORY(controlport)
 list(APPEND gnuradio_runtime_sources
   basic_block.cc
   block.cc
+  pothos_block.cc
   block_detail.cc
   block_executor.cc
   block_gateway_impl.cc

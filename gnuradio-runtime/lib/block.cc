@@ -61,6 +61,7 @@ namespace gr {
     set_msg_handler(pmt::mp("system"), boost::bind(&block::system_handler, this, _1));
 
     configure_default_loggers(d_logger, d_debug_logger, alias());
+    this->initialize();
   }
 
   block::~block()
@@ -175,7 +176,7 @@ namespace gr {
 
     d_relative_rate = relative_rate;
   }
-
+/*
   void
   block::consume(int which_input, int how_many_items)
   {
@@ -193,7 +194,7 @@ namespace gr {
   {
     d_detail->produce(which_output, how_many_items);
   }
-
+*/
   int
   block::fixed_rate_ninput_to_noutput(int ninput)
   {

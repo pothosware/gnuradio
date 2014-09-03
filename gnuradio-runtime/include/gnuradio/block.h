@@ -786,6 +786,17 @@ namespace gr {
 	*/
    void clear_finished(){ d_finished = false; }
 
+  private:
+    void initialize(void);
+    void __setNumInputs(size_t);
+    void __setNumOutputs(size_t);
+    void activate(void);
+    void deactivate(void);
+    void work(void);
+    void propagateLabels(const Pothos::InputPort *input);
+    std::shared_ptr<Pothos::BufferManager> getInputBufferManager(const std::string &name, const std::string &domain);
+    std::shared_ptr<Pothos::BufferManager> getOutputBufferManager(const std::string &name, const std::string &domain);
+
   };
 
   typedef std::vector<block_sptr> block_vector_t;
