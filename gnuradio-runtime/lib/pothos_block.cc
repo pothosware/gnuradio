@@ -21,6 +21,7 @@
 
 #include <Pothos/Framework.hpp>
 #include <gnuradio/block.h>
+#include "block_executor.h"
 #include <Poco/Format.h>
 #include <cassert>
 #include <iostream>
@@ -31,15 +32,15 @@
 void gr::block::initialize(void)
 {
     Pothos::Block::setName(d_name);
-    for (int i = 0; i < d_input_signature->sizeof_stream_items().size(); i++)
+    for (size_t i = 0; i < d_input_signature->sizeof_stream_items().size(); i++)
     {
-        if (d_input_signature->max_streams() != io_signature::IO_INFINITE and i >= d_input_signature->max_streams()) break;
+        if (d_input_signature->max_streams() != io_signature::IO_INFINITE and int(i) >= d_input_signature->max_streams()) break;
         auto bytes = d_input_signature->sizeof_stream_items()[i];
         Pothos::Block::setupInput(i, Pothos::DType(Poco::format("GrIoSig%d", bytes), bytes));
     }
-    for (int i = 0; i < d_output_signature->sizeof_stream_items().size(); i++)
+    for (size_t i = 0; i < d_output_signature->sizeof_stream_items().size(); i++)
     {
-        if (d_output_signature->max_streams() != io_signature::IO_INFINITE and i >= d_output_signature->max_streams()) break;
+        if (d_output_signature->max_streams() != io_signature::IO_INFINITE and int(i) >= d_output_signature->max_streams()) break;
         auto bytes = d_output_signature->sizeof_stream_items()[i];
         Pothos::Block::setupOutput(i, Pothos::DType(Poco::format("GrIoSig%d", bytes), bytes));
     }
@@ -70,12 +71,13 @@ void gr::block::__setNumOutputs(const size_t num)
  **********************************************************************/
 void gr::block::activate(void)
 {
-    this->start();
+    auto block = gr::cast_to_block_sptr(this->shared_from_this());
+    _executor.reset(new gr::block_executor(block));
 }
 
 void gr::block::deactivate(void)
 {
-    this->stop();
+    _executor.reset();
 }
 
 /***********************************************************************
@@ -91,39 +93,12 @@ void gr::block::work(void)
 
     //grab all of the labels
 
-    //create a count of the number of input items per indexed ports
-    std::vector<int> ninput_items(this->inputs().size());
-    for (size_t i = 0; i < ninput_items.size(); i++)
+    for (size_t i = 0; i < Pothos::Block::inputs().size(); i++)
     {
         this->input(i)->setReserve(d_history+1);
-        ninput_items[i] = this->input(i)->elements();
     }
 
-    //perform the forecast input loop
-    int noutput_items = workInfo.minOutElements;
-    std::vector<int> forecast_items(this->inputs().size());
-    while (noutput_items > 0)
-    {
-        this->forecast(noutput_items, forecast_items);
-        for (size_t i = 0; i < ninput_items.size(); i++)
-        {
-            if (forecast_items[i] > ninput_items[i])
-            {
-                noutput_items -= 1;
-                goto forecast_again;
-            }
-        }
-        break;
-        forecast_again: continue;
-    }
-
-    //call into general work with the available buffers
-    int ret = this->general_work(noutput_items, ninput_items,
-        const_cast<gr_vector_const_void_star &>(workInfo.inputPointers),
-        const_cast<gr_vector_void_star &>(workInfo.outputPointers));
-
-    //when ret is positive it means produce this much on all indexed output ports
-    if (ret > 0) for (auto output : Pothos::Block::outputs()) output->produce(size_t(ret));
+    reinterpret_cast<gr::block_executor *>(_executor.get())->run_one_iteration();
 }
 
 /***********************************************************************
