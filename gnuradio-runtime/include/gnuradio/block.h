@@ -796,6 +796,7 @@ namespace gr {
     void propagateLabels(const Pothos::InputPort *input);
     std::shared_ptr<Pothos::BufferManager> getInputBufferManager(const std::string &name, const std::string &domain);
     std::shared_ptr<Pothos::BufferManager> getOutputBufferManager(const std::string &name, const std::string &domain);
+    std::shared_ptr<void> _executor;
 
   };
 

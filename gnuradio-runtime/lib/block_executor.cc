@@ -67,22 +67,22 @@ namespace gr {
   // blocked on is done.
   //
   static int
-  min_available_space(block_detail *d, int output_multiple, int min_noutput_items)
+  min_available_space(Pothos::Block *d, int output_multiple, int min_noutput_items)
   {
     int min_space = std::numeric_limits<int>::max();
     if(min_noutput_items == 0)
       min_noutput_items = 1;
-    for(int i = 0; i < d->noutputs (); i++) {
-      gr::thread::scoped_lock guard(*d->output(i)->mutex());
-      int avail_n = round_down(d->output(i)->space_available(), output_multiple);
-      int best_n = round_down(d->output(i)->bufsize()/2, output_multiple);
+    for(size_t i = 0; i < d->outputs().size(); i++) {
+      //gr::thread::scoped_lock guard(*d->output(i)->mutex());
+      int avail_n = round_down(d->output(i)->elements(), output_multiple);
+      int best_n = round_down(d->output(i)->elements(), output_multiple);
       if(best_n < min_noutput_items)
         throw std::runtime_error("Buffer too small for min_noutput_items");
       int n = std::min(avail_n, best_n);
       if(n < min_noutput_items){  // We're blocked on output.
-        if(d->output(i)->done()){ // Downstream is done, therefore we're done.
-          return -1;
-        }
+        //if(d->output(i)->done()){ // Downstream is done, therefore we're done.
+        //  return -1;
+        //}
         return 0;
       }
       min_space = std::min(min_space, n);
@@ -91,13 +91,13 @@ namespace gr {
   }
 
   static bool
-  propagate_tags(block::tag_propagation_policy_t policy, block_detail *d,
+  propagate_tags(block::tag_propagation_policy_t policy, Pothos::Block *d,
                  const std::vector<uint64_t> &start_nitems_read, double rrate,
                  std::vector<tag_t> &rtags, long block_id)
   {
     // Move tags downstream
     // if a sink, we don't need to move downstream
-    if(d->sink_p()) {
+    if(d->outputs().empty()) {
       return true;
     }
 
@@ -107,41 +107,41 @@ namespace gr {
       break;
     case block::TPP_ALL_TO_ALL:
       // every tag on every input propogates to everyone downstream
-      for(int i = 0; i < d->ninputs(); i++) {
-        d->get_tags_in_range(rtags, i, start_nitems_read[i],
-                             d->nitems_read(i), block_id);
+      for(size_t i = 0; i < d->inputs().size(); i++) {
+        //TODO d->get_tags_in_range(rtags, i, start_nitems_read[i],
+        //                     d->nitems_read(i), block_id);
 
         std::vector<tag_t>::iterator t;
         if(rrate == 1.0) {
           for(t = rtags.begin(); t != rtags.end(); t++) {
-            for(int o = 0; o < d->noutputs(); o++)
-              d->output(o)->add_item_tag(*t);
+            //for(size_t o = 0; o < d->outputs().size(); o++)
+              //TODO d->output(o)->add_item_tag(*t);
           }
         }
         else {
           for(t = rtags.begin(); t != rtags.end(); t++) {
             tag_t new_tag = *t;
             new_tag.offset = ((double)new_tag.offset * rrate) + 0.5;
-            for(int o = 0; o < d->noutputs(); o++)
-              d->output(o)->add_item_tag(new_tag);
+            //for(size_t o = 0; o < d->outputs().size(); o++)
+              //TODO d->output(o)->add_item_tag(new_tag);
           }
         }
       }
       break;
     case block::TPP_ONE_TO_ONE:
       // tags from input i only go to output i
-      // this requires d->ninputs() == d->noutputs; this is checked when this
+      // this requires d->inputs().size() == d->noutputs; this is checked when this
       // type of tag-propagation system is selected in block_detail
-      if(d->ninputs() == d->noutputs()) {
-        for(int i = 0; i < d->ninputs(); i++) {
-          d->get_tags_in_range(rtags, i, start_nitems_read[i],
-                               d->nitems_read(i), block_id);
+      if(d->inputs().size() == d->outputs().size()) {
+        for(size_t i = 0; i < d->inputs().size(); i++) {
+          //TODO d->get_tags_in_range(rtags, i, start_nitems_read[i],
+          //                     d->nitems_read(i), block_id);
 
           std::vector<tag_t>::iterator t;
           for(t = rtags.begin(); t != rtags.end(); t++) {
             tag_t new_tag = *t;
             new_tag.offset = ((double)new_tag.offset * rrate) + 0.5;
-            d->output(i)->add_item_tag(new_tag);
+            //TODO d->output(i)->add_item_tag(new_tag);
           }
         }
       }
@@ -195,23 +195,23 @@ namespace gr {
     double rrate;
 
     block        *m = d_block.get();
-    block_detail *d = m->detail().get();
+    Pothos::Block *d = m;//->detail().get();
 
     LOG(*d_log << std::endl << m);
 
     max_noutput_items = round_down(d_max_noutput_items, m->output_multiple());
 
-    if(d->done()){
+    if(!d->isActive()){
       assert(0);
       return DONE;
     }
 
-    if(d->source_p ()) {
+    if(d->inputs().empty()) {
       d_ninput_items_required.resize(0);
       d_ninput_items.resize(0);
       d_input_items.resize(0);
       d_input_done.resize(0);
-      d_output_items.resize(d->noutputs());
+      d_output_items.resize(d->outputs().size());
       d_start_nitems_read.resize(0);
 
       // determine the minimum available output space
@@ -229,24 +229,24 @@ namespace gr {
       goto setup_call_to_work;		// jump to common code
     }
 
-    else if(d->sink_p ()) {
-      d_ninput_items_required.resize(d->ninputs ());
-      d_ninput_items.resize(d->ninputs ());
-      d_input_items.resize(d->ninputs ());
-      d_input_done.resize(d->ninputs());
+    else if(d->outputs().empty()) {
+      d_ninput_items_required.resize(d->inputs().size());
+      d_ninput_items.resize(d->inputs().size());
+      d_input_items.resize(d->inputs().size());
+      d_input_done.resize(d->inputs().size());
       d_output_items.resize (0);
-      d_start_nitems_read.resize(d->ninputs());
+      d_start_nitems_read.resize(d->inputs().size());
       LOG(*d_log << " sink\n");
 
       max_items_avail = 0;
-      for(int i = 0; i < d->ninputs (); i++) {
+      for(size_t i = 0; i < d->inputs().size(); i++) {
         {
           /*
            * Acquire the mutex and grab local copies of items_available and done.
            */
-          gr::thread::scoped_lock guard(*d->input(i)->mutex());
-          d_ninput_items[i] = d->input(i)->items_available();
-          d_input_done[i] = d->input(i)->done();
+          //gr::thread::scoped_lock guard(*d->input(i)->mutex());
+          d_ninput_items[i] = d->input(i)->elements();
+          d_input_done[i] = false;//d->input(i)->done();
         }
 
         LOG(*d_log << "  d_ninput_items[" << i << "] = " << d_ninput_items[i] << std::endl);
@@ -275,22 +275,22 @@ namespace gr {
 
     else {
       // do the regular thing
-      d_ninput_items_required.resize (d->ninputs ());
-      d_ninput_items.resize (d->ninputs ());
-      d_input_items.resize (d->ninputs ());
-      d_input_done.resize(d->ninputs());
-      d_output_items.resize (d->noutputs ());
-      d_start_nitems_read.resize(d->ninputs());
+      d_ninput_items_required.resize (d->inputs().size());
+      d_ninput_items.resize (d->inputs().size());
+      d_input_items.resize (d->inputs().size());
+      d_input_done.resize(d->inputs().size());
+      d_output_items.resize (d->outputs().size());
+      d_start_nitems_read.resize(d->inputs().size());
 
       max_items_avail = 0;
-      for(int i = 0; i < d->ninputs (); i++) {
+      for(size_t i = 0; i < d->inputs().size(); i++) {
         {
           /*
            * Acquire the mutex and grab local copies of items_available and done.
            */
-          gr::thread::scoped_lock guard(*d->input(i)->mutex());
-          d_ninput_items[i] = d->input(i)->items_available ();
-          d_input_done[i] = d->input(i)->done();
+          //gr::thread::scoped_lock guard(*d->input(i)->mutex());
+          d_ninput_items[i] = d->input(i)->elements ();
+          d_input_done[i] = false;//d->input(i)->done();
         }
         max_items_avail = std::max(max_items_avail, d_ninput_items[i]);
       }
@@ -371,12 +371,12 @@ namespace gr {
       m->forecast (noutput_items, d_ninput_items_required);
 
       // See if we've got sufficient input available
-      int i;
-      for(i = 0; i < d->ninputs (); i++)
+      size_t i;
+      for(i = 0; i < d->inputs().size(); i++)
         if(d_ninput_items_required[i] > d_ninput_items[i])	// not enough
           break;
 
-      if(i < d->ninputs()) {			// not enough input on input[i]
+      if(i < d->inputs().size()) {			// not enough input on input[i]
         // if we can, try reducing the size of our output request
         if(noutput_items > m->output_multiple()) {
           noutput_items /= 2;
@@ -390,6 +390,7 @@ namespace gr {
           goto were_done;
 
         // Is it possible to ever fulfill this request?
+        /*
         if(d_ninput_items_required[i] > d->input(i)->max_possible_items_available()) {
           // Nope, never going to happen...
           std::cerr << "\nsched: <block " << m->name()
@@ -403,6 +404,7 @@ namespace gr {
                     << "  If this is a filter, consider reducing the number of taps.\n";
           goto were_done;
         }
+        */
 
         // If we were made unaligned in this round but return here without
         // processing; reset the unalignment claim before next entry.
@@ -415,22 +417,23 @@ namespace gr {
 
       // We've got enough data on each input to produce noutput_items.
       // Finish setting up the call to work.
-      for(int i = 0; i < d->ninputs (); i++)
-        d_input_items[i] = d->input(i)->read_pointer();
+      for(size_t i = 0; i < d->inputs().size(); i++)
+        d_input_items[i] = d->input(i)->buffer().as<const void *>();
 
     setup_call_to_work:
 
-      d->d_produce_or = 0;
-      for(int i = 0; i < d->noutputs (); i++)
-        d_output_items[i] = d->output(i)->write_pointer();
+      //d->d_produce_or = 0;
+      for(size_t i = 0; i < d->outputs().size(); i++)
+        d_output_items[i] = d->output(i)->buffer().as<void *>();
 
       // determine where to start looking for new tags
-      for(int i = 0; i < d->ninputs(); i++)
-        d_start_nitems_read[i] = d->nitems_read(i);
+      //TODO?
+      //for(size_t i = 0; i < d->inputs().size(); i++)
+      //  d_start_nitems_read[i] = d->nitems_read(i);
 
 #ifdef GR_PERFORMANCE_COUNTERS
-      if(d_use_pc)
-        d->start_perf_counters();
+      //if(d_use_pc)
+        //d->start_perf_counters();
 #endif /* GR_PERFORMANCE_COUNTERS */
 
       // Do the actual work of the block
@@ -438,8 +441,8 @@ namespace gr {
                               d_input_items, d_output_items);
 
 #ifdef GR_PERFORMANCE_COUNTERS
-      if(d_use_pc)
-        d->stop_perf_counters(noutput_items, n);
+      //if(d_use_pc)
+        //d->stop_perf_counters(noutput_items, n);
 #endif /* GR_PERFORMANCE_COUNTERS */
 
       LOG(*d_log << "  general_work: noutput_items = " << noutput_items
@@ -471,10 +474,11 @@ namespace gr {
         goto were_done;
 
       if(n != block::WORK_CALLED_PRODUCE)
-        d->produce_each(n);     // advance write pointers
+        for (auto output : d->outputs()) output->produce(n);
+        //d->produce_each(n);     // advance write pointers
 
-      if(d->d_produce_or > 0)   // block produced something
-        return READY;
+      //if(d->d_produce_or > 0)   // block produced something
+      //  return READY;
 
       // We didn't produce any output even though we called general_work.
       // We have (most likely) consumed some input.
@@ -496,7 +500,7 @@ namespace gr {
 
   were_done:
     LOG(*d_log << "  were_done\n");
-    d->set_done (true);
+    //d->set_done (true);
     return DONE;
   }
 
