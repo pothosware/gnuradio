@@ -22,6 +22,7 @@
 #include <Pothos/Framework.hpp>
 #include <gnuradio/block.h>
 #include <Poco/Format.h>
+#include <cassert>
 #include <iostream>
 
 /***********************************************************************
@@ -30,13 +31,15 @@
 void gr::block::initialize(void)
 {
     Pothos::Block::setName(d_name);
-    for (size_t i = 0; i < d_input_signature->sizeof_stream_items().size(); i++)
+    for (int i = 0; i < d_input_signature->sizeof_stream_items().size(); i++)
     {
+        if (d_input_signature->max_streams() != io_signature::IO_INFINITE and i >= d_input_signature->max_streams()) break;
         auto bytes = d_input_signature->sizeof_stream_items()[i];
         Pothos::Block::setupInput(i, Pothos::DType(Poco::format("GrIoSig%d", bytes), bytes));
     }
-    for (size_t i = 0; i < d_output_signature->sizeof_stream_items().size(); i++)
+    for (int i = 0; i < d_output_signature->sizeof_stream_items().size(); i++)
     {
+        if (d_output_signature->max_streams() != io_signature::IO_INFINITE and i >= d_output_signature->max_streams()) break;
         auto bytes = d_output_signature->sizeof_stream_items()[i];
         Pothos::Block::setupOutput(i, Pothos::DType(Poco::format("GrIoSig%d", bytes), bytes));
     }
@@ -48,6 +51,7 @@ void gr::block::__setNumInputs(const size_t num)
 {
     for (size_t i = Pothos::Block::inputs().size(); i < num; i++)
     {
+        assert(not Pothos::Block::inputs().empty());
         Pothos::Block::setupInput(i, Pothos::Block::inputs().back()->dtype());
     }
 }
@@ -56,6 +60,7 @@ void gr::block::__setNumOutputs(const size_t num)
 {
     for (size_t i = Pothos::Block::outputs().size(); i < num; i++)
     {
+        assert(not Pothos::Block::outputs().empty());
         Pothos::Block::setupInput(i, Pothos::Block::outputs().back()->dtype());
     }
 }
