@@ -96,6 +96,7 @@ namespace gr {
     }
     msg_queue[port_id] = msg_queue_t();
     msg_queue_ready[port_id] = boost::shared_ptr<boost::condition_variable>(new boost::condition_variable());
+    if (pmt::symbol_to_string(port_id) == "system") return; //ignore ubiquitous system port
     Pothos::Block::setupInput(pmt::symbol_to_string(port_id));
   }
 
