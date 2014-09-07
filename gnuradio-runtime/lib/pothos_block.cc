@@ -22,7 +22,9 @@
 #include <Pothos/Framework.hpp>
 #include <gnuradio/block.h>
 #include "block_executor.h"
+#include "pmt_helper.h"
 #include <Poco/Format.h>
+#include <cmath>
 #include <cassert>
 #include <iostream>
 
@@ -89,10 +91,6 @@ void gr::block::work(void)
 
     if (workInfo.minElements == 0) return;
 
-    //grab all of the messages
-
-    //grab all of the labels
-
     for (size_t i = 0; i < Pothos::Block::inputs().size(); i++)
     {
         this->input(i)->setReserve(d_history+1);
@@ -102,11 +100,39 @@ void gr::block::work(void)
 }
 
 /***********************************************************************
- * TODO
+ * propagateLabels
  **********************************************************************/
-void gr::block::propagateLabels(const Pothos::InputPort *input)
+void gr::block::propagateLabels(const Pothos::InputPort *inputPort)
 {
-    
+    switch (tag_propagation_policy())
+    {
+    case block::TPP_DONT: return;
+    case block::TPP_ONE_TO_ONE:
+    {
+        if (inputPort->index() == -1) return;
+        const auto portIndex = size_t(inputPort->index());
+        if (portIndex >= Pothos::Block::outputs().size()) return;
+        auto outputPort = Pothos::Block::output(portIndex);
+        for (const auto &label : inputPort->labels())
+        {
+            auto newLabel = label;
+            newLabel.index += d_attr_delay;
+            newLabel.index = std::llround(newLabel.index*this->relative_rate());
+            outputPort->postLabel(label);
+        }
+    }
+    case block::TPP_ALL_TO_ALL:
+    {
+        for (const auto &label : inputPort->labels())
+        {
+            auto newLabel = label;
+            newLabel.index += d_attr_delay;
+            newLabel.index = std::llround(newLabel.index*this->relative_rate());
+            for (auto outputPort : Pothos::Block::outputs()) outputPort->postLabel(label);
+        }
+    }
+    default: return;
+    }
 }
 
 /***********************************************************************
@@ -131,7 +157,7 @@ std::shared_ptr<Pothos::BufferManager> gr::block::getOutputBufferManager(const s
 }
 
 /***********************************************************************
- * customized hooks into the Pothos framework
+ * customized hooks - produce/consume
  **********************************************************************/
 namespace gr
 {
@@ -154,5 +180,66 @@ namespace gr
   {
     if (how_many_items < 0) return;
     Pothos::Block::output(which_output)->produce(how_many_items);
+  }
+}
+
+/***********************************************************************
+ * customized hooks - tags
+ **********************************************************************/
+namespace gr
+{
+  void
+  block::add_item_tag(unsigned int which_output,
+                         const tag_t &tag)
+  {
+    auto outputPort = Pothos::Block::output(which_output);
+    Pothos::Label label;
+    label.id = pmt::symbol_to_string(tag.key);
+    label.data = pmt_to_obj(tag.value);
+    assert(tag.offset >= outputPort->totalElements());
+    label.index = tag.offset - outputPort->totalElements();
+    outputPort->postLabel(label);
+  }
+
+  void
+  block::remove_item_tag(unsigned int which_input,
+                         const tag_t &tag)
+  {
+    auto inputPort = Pothos::Block::input(which_input);
+    for (const auto &label : inputPort->labels())
+    {
+        if (label.index + inputPort->totalElements() != tag.offset - d_attr_delay) continue;
+        if (label.id != pmt::symbol_to_string(tag.key)) continue;
+        return inputPort->removeLabel(label);
+    }
+  }
+
+  void
+  block::get_tags_in_range(std::vector<tag_t> &v,
+                           unsigned int which_input,
+                           uint64_t start, uint64_t end)
+  {
+    return get_tags_in_range(v, which_input, start, end, pmt::pmt_t());
+  }
+
+  void
+  block::get_tags_in_range(std::vector<tag_t> &v,
+                           unsigned int which_input,
+                           uint64_t start, uint64_t end,
+                           const pmt::pmt_t &key)
+  {
+    v.clear();
+    auto inputPort = Pothos::Block::input(which_input);
+    for (const auto &label : inputPort->labels())
+    {
+        auto offset = label.index + inputPort->totalElements() + d_attr_delay;
+        if (offset < start or offset >= end) continue;
+        tag_t tag;
+        tag.key = pmt::string_to_symbol(label.id);
+        if (pmt::is_symbol(key) and key != tag.key) continue;
+        tag.value = obj_to_pmt(label.data);
+        tag.offset = offset;
+        v.push_back(tag);
+    }
   }
 }

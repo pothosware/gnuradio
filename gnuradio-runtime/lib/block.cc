@@ -230,7 +230,7 @@ namespace gr {
       return 0;
     }
   }
-
+/*
   void
   block::add_item_tag(unsigned int which_output,
                          const tag_t &tag)
@@ -261,7 +261,7 @@ namespace gr {
   {
     d_detail->get_tags_in_range(v, which_input, start, end, key, unique_id());
   }
-
+*/
   void
   block::get_tags_in_window(std::vector<tag_t> &v,
                             unsigned int which_input,
