@@ -24,6 +24,7 @@
 #include "config.h"
 #endif
 
+#include "pmt_helper.h"
 #include <gnuradio/basic_block.h>
 #include <gnuradio/block_registry.h>
 #include <stdexcept>
@@ -95,6 +96,7 @@ namespace gr {
     }
     msg_queue[port_id] = msg_queue_t();
     msg_queue_ready[port_id] = boost::shared_ptr<boost::condition_variable>(new boost::condition_variable());
+    Pothos::Block::setupInput(pmt::symbol_to_string(port_id));
   }
 
   pmt::pmt_t
@@ -120,6 +122,7 @@ namespace gr {
       throw std::runtime_error("message_port_register_out: port already in use");
     }
     d_message_subscribers = pmt::dict_add(d_message_subscribers, port_id, pmt::PMT_NIL);
+    Pothos::Block::setupOutput(pmt::symbol_to_string(port_id));
   }
 
   pmt::pmt_t
@@ -140,6 +143,8 @@ namespace gr {
     if(!pmt::dict_has_key(d_message_subscribers, port_id)) {
       throw std::runtime_error("port does not exist");
     }
+
+    return Pothos::Block::output(pmt::symbol_to_string(port_id))->postMessage(pmt_to_obj(msg));
 
     pmt::pmt_t currlist = pmt::dict_ref(d_message_subscribers, port_id, pmt::PMT_NIL);
     // iterate through subscribers on port

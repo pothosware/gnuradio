@@ -87,15 +87,40 @@ void gr::block::deactivate(void)
  **********************************************************************/
 void gr::block::work(void)
 {
+    //forward messages into the queues
+    for (const auto &pair : Pothos::Block::allInputs())
+    {
+        auto inputPort = pair.second;
+        while (inputPort->hasMessage()) _post(
+            pmt::string_to_symbol(inputPort->name()),
+            obj_to_pmt(inputPort->popMessage()));
+    }
+
+    // handle any queued up messages
+    pmt::pmt_t msg;
+    for (auto &i : this->msg_queue)
+    {
+        // Check if we have a message handler attached before getting
+        // any messages. This is mostly a protection for the unknown
+        // startup sequence of the threads.
+        if(this->has_msg_handler(i.first)) {
+          while((msg = this->delete_head_nowait(i.first))) {
+            this->dispatch_msg(i.first,msg);
+          }
+        }
+    }
+
+    //ensure all indexed output ports have available buffer
     const auto &workInfo = Pothos::Block::workInfo();
+    if (workInfo.minOutElements == 0) return;
 
-    if (workInfo.minElements == 0) return;
-
+    //re-apply reserve in-case it changed (low cost setter)
     for (size_t i = 0; i < Pothos::Block::inputs().size(); i++)
     {
         this->input(i)->setReserve(d_history+1);
     }
 
+    //run the executor for one iteration to call into derived class's work()
     reinterpret_cast<gr::block_executor *>(_executor.get())->run_one_iteration();
 }
 
