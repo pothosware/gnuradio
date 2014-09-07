@@ -73,6 +73,7 @@ list(APPEND gnuradio_runtime_sources
   basic_block.cc
   block.cc
   pothos_block.cc
+  pmt_helper.cc
   block_detail.cc
   block_executor.cc
   block_gateway_impl.cc
