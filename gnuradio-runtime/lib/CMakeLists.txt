@@ -72,8 +72,6 @@ GR_INCLUDE_SUBDIRECTORY(controlport)
 list(APPEND gnuradio_runtime_sources
   basic_block.cc
   block.cc
-  pothos_block.cc
-  pmt_helper.cc
   block_detail.cc
   block_executor.cc
   block_gateway_impl.cc
@@ -122,6 +120,16 @@ list(APPEND gnuradio_runtime_sources
   vmcircbuf_prefs.cc
   vmcircbuf_sysv_shm.cc
   ${gnuradio_ctrlport_sources}
+)
+
+# Pothos support sources
+list(REMOVE_ITEM gnuradio_runtime_sources
+    block_executor.cc
+)
+list(APPEND gnuradio_runtime_sources
+    pmt_helper.cc
+    pothos_block.cc
+    pothos_block_executor.cc
 )
 
 # PowerPC workaround for posix_memalign
