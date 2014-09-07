@@ -463,13 +463,13 @@ namespace gr {
         if(rrate > 0)
           m->set_relative_rate(rrate);
       }
-
+/*
       // Now propagate the tags based on the new relative rate
       if(!propagate_tags(m->tag_propagation_policy(), d,
                          d_start_nitems_read, m->relative_rate(),
                          d_returned_tags, m->unique_id()))
         goto were_done;
-
+*/
       if(n == block::WORK_DONE)
         goto were_done;
 
