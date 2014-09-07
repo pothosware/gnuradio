@@ -21,6 +21,7 @@
 
 #include "pmt_helper.h"
 #include <Pothos/Object.hpp>
+#include <Pothos/Framework/Packet.hpp>
 #include <Poco/Types.h> //POCO_LONG_IS_64_BIT
 #include <cstdint>
 #include <utility>
@@ -33,6 +34,24 @@ pmt::pmt_t obj_to_pmt(const Pothos::Object &obj)
 {
     //the container is null
     if (not obj) return pmt::pmt_t();
+
+    //Packet support
+    if (obj.type() == typeid(Pothos::Packet))
+    {
+        const auto &packet = obj.extract<Pothos::Packet>();
+
+        //create metadata
+        auto meta = pmt::make_dict();
+        for (const auto &pr : packet.metadata)
+        {
+            meta = pmt::dict_add(meta, pmt::string_to_symbol(pr.first), obj_to_pmt(pr.second));
+        }
+
+        //create blob (creates a copy)
+        auto blob = pmt::make_blob(packet.payload.as<const void *>(), packet.payload.length);
+
+        return pmt::cons(meta, blob);
+    }
 
     #define decl_obj_to_pmt(t, conv) \
         if (obj.type() == typeid(t)) return conv(obj.extract<t>())
@@ -132,10 +151,37 @@ pmt::pmt_t obj_to_pmt(const Pothos::Object &obj)
     return pmt::make_any(obj);
 }
 
+struct SharedPMTHolder
+{
+    SharedPMTHolder(const pmt::pmt_t &p): ref(p){}
+    pmt::pmt_t ref;
+};
+
 Pothos::Object pmt_to_obj(const pmt::pmt_t &p)
 {
     //if the container null?
     if (not p) return Pothos::Object();
+
+    //PDU support
+    if (pmt::is_pair(p) and pmt::is_dict(pmt::car(p)) and pmt::is_blob(pmt::cdr(p)))
+    {
+        Pothos::Packet packet;
+
+        //create a metadata map from the pmt dict
+        pmt::pmt_t meta(pmt::car(p));
+        auto items = pmt::dict_items(p);
+        for (size_t i = 0; i < pmt::length(items); i++)
+        {
+            auto item = pmt::nth(i, items);
+            auto key = pmt::symbol_to_string(pmt::car(item));
+            auto val = pmt_to_obj(pmt::cdr(item));
+            packet.metadata[key] = val;
+        }
+
+        //create a payload from the blob (zero-copy)
+        pmt::pmt_t vect(pmt::cdr(p));
+        packet.payload = Pothos::SharedBuffer(size_t(pmt::blob_data(vect)), pmt::length(vect), std::make_shared<SharedPMTHolder>(vect));
+    }
 
     #define decl_pmt_to_obj(check, conv) if (check(p)) return Pothos::Object(conv(p))
 
