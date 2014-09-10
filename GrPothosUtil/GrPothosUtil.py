@@ -549,7 +549,11 @@ def createMetaBlockInfo(grc_file, info):
         param_d['options'].append(dict(name=name, value='"%s"'%factory['name']))
 
     #create new block desc
-    metaBlockDesc = copy.deepcopy(info[0][1]) #copy first block desc
+    metaBlockDesc = None
+    for factory, blockDesc in info:
+        if metaBlockDesc is None or len(metaBlockDesc['args']) < len(blockDesc['args']):
+            metaBlockDesc = copy.deepcopy(blockDesc) #copy block desc the most factory args
+    assert(metaBlockDesc)
     metaBlockDesc['args'].insert(0, param_d['key'])
     metaBlockDesc['params'].insert(0, param_d)
     assert('_' in metaBlockDesc['path'])
