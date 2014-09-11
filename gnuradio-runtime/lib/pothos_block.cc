@@ -110,15 +110,20 @@ void gr::block::work(void)
         }
     }
 
-    //ensure all indexed output ports have available buffer
-    const auto &workInfo = Pothos::Block::workInfo();
-    if (workInfo.minOutElements == 0) return;
-
     //re-apply reserve in-case it changed (low cost setter)
-    for (size_t i = 0; i < Pothos::Block::inputs().size(); i++)
+    size_t reserve = d_history;
+    if (this->fixed_rate())
     {
-        this->input(i)->setReserve(d_history+1);
+        const size_t noutput_items = this->output_multiple_set()?this->output_multiple():1;
+        reserve = this->fixed_rate_noutput_to_ninput(noutput_items);
     }
+    for (auto input : Pothos::Block::inputs()) input->setReserve(reserve);
+
+    //check that input and output items meets the reserve req
+    const auto &workInfo = Pothos::Block::workInfo();
+    if (workInfo.minInElements < reserve) return;
+    if (workInfo.minOutElements == 0) return;
+    if (this->fixed_rate() and workInfo.minOutElements < this->fixed_rate_ninput_to_noutput(reserve)) return;
 
     //run the executor for one iteration to call into derived class's work()
     reinterpret_cast<gr::block_executor *>(_executor.get())->run_one_iteration();
