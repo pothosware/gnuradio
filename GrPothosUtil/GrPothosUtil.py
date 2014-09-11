@@ -318,12 +318,18 @@ def find_factory_function(className, classInfo, cppHeader):
 
     return None
 
+KNOWN_FRAMEWORK_METHODS = [
+    'general_work', 'work', 'forecast',
+    'fixed_rate_noutput_to_ninput',
+    'fixed_rate_ninput_to_noutput',
+]
+
 def find_block_methods(classInfo):
     for method in classInfo['methods']['public']:
         if method['static']: continue
         if method['constructor']: continue
         if method['destructor']: continue
-        if method['name'] in ('general_work', 'work', 'forecast'): continue
+        if method['name'] in KNOWN_FRAMEWORK_METHODS: continue
         if len(method['parameters']) > MAX_ARGS:
             warning("Too many parameters %s::%s ignored", classInfo['name'], method['name'])
             continue
