@@ -439,7 +439,8 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
             type_str = factory_param['type'].replace('&', '').replace('const', '').strip()
             if type_str.startswith('unsigned ') or type_str.startswith('signed '):
                 type_str = type_str.split()[-1] #fixes unsigned int -> int, we dont want spaces
-            internal_factory_args.append('%s()'%type_str) #defaults it
+            if 'taps' in factory_key.lower(): internal_factory_args.append('%s(1)'%type_str)
+            else: internal_factory_args.append('%s()'%type_str) #defaults it
         else:
             exported_factory_args.append('%s %s'%(factory_param['type'], factory_param['name']))
             internal_factory_args.append(factory_param['name'])
