@@ -23,10 +23,44 @@
 #include <gnuradio/block.h>
 #include "block_executor.h"
 #include "pmt_helper.h"
-#include <Poco/Format.h>
 #include <cmath>
 #include <cassert>
+#include <cctype>
 #include <iostream>
+
+/***********************************************************************
+ * try our best to infer the data type given the info at hand
+ **********************************************************************/
+static Pothos::DType inferDType(const size_t ioSize, const std::string &name, const bool isInput)
+{
+    Pothos::DType dtype("custom", ioSize); //default if we cant figure it out
+    const auto lastUnder = name.find_last_of("_");
+    if (lastUnder == std::string::npos) return dtype;
+
+    //grab data type suffix
+    auto suffix = name.substr(lastUnder+1);
+    if (suffix.empty()) return dtype;
+
+    //strip leading v (for vector)
+    if (std::tolower(suffix.front()) == 'v') suffix = suffix.substr(1);
+    if (suffix.empty()) return dtype;
+
+    //extract signature character
+    char sig = suffix.front();
+    if (not isInput and suffix.size() >= 2) sig = suffix.at(1);
+    sig = std::tolower(sig);
+
+    //inspect signature and io type for size-multiple
+    #define inspectSig(sigName, sigType) \
+        if (sig == sigName and ioSize%sizeof(sigType) == 0) \
+            return Pothos::DType(typeid(sigType), ioSize/sizeof(sigType))
+    inspectSig('b', char);
+    inspectSig('s', short);
+    inspectSig('i', int);
+    inspectSig('f', float);
+    inspectSig('c', gr_complex);
+    return dtype;
+}
 
 /***********************************************************************
  * init the name and ports -- called by the block constructor
@@ -38,13 +72,13 @@ void gr::block::initialize(void)
     {
         if (d_input_signature->max_streams() != io_signature::IO_INFINITE and int(i) >= d_input_signature->max_streams()) break;
         auto bytes = d_input_signature->sizeof_stream_items()[i];
-        Pothos::Block::setupInput(i, Pothos::DType(Poco::format("GrIoSig%d", bytes), bytes));
+        Pothos::Block::setupInput(i, inferDType(bytes, d_name, true));
     }
     for (size_t i = 0; i < d_output_signature->sizeof_stream_items().size(); i++)
     {
         if (d_output_signature->max_streams() != io_signature::IO_INFINITE and int(i) >= d_output_signature->max_streams()) break;
         auto bytes = d_output_signature->sizeof_stream_items()[i];
-        Pothos::Block::setupOutput(i, Pothos::DType(Poco::format("GrIoSig%d", bytes), bytes));
+        Pothos::Block::setupOutput(i, inferDType(bytes, d_name, false));
     }
     Pothos::Block::registerCall(this, POTHOS_FCN_TUPLE(gr::block, __setNumInputs));
     Pothos::Block::registerCall(this, POTHOS_FCN_TUPLE(gr::block, __setNumOutputs));
