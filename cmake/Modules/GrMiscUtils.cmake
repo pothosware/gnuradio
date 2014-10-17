@@ -131,11 +131,7 @@ endfunction(GR_LIBTOOL)
 ########################################################################
 # Pothos setup
 ########################################################################
-if (NOT POTHOS_MODULE_PATH)
-    set(POTHOS_MODULE_PATH "${CMAKE_INSTALL_PREFIX}/share/Pothos/cmake/Modules")
-endif()
-
-include(${POTHOS_MODULE_PATH}/PothosUtil.cmake)
+find_package(Pothos CONFIG REQUIRED)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     #noisy warnings to avoid on every build
@@ -151,8 +147,8 @@ endif()
 function(GR_LIBRARY_FOO target)
 
     #add pothos to the build
-    include_directories(${POTHOS_INCLUDE_DIRS})
-    target_link_libraries(${target} ${POTHOS_LIBRARIES})
+    include_directories(${Pothos_INCLUDE_DIRS})
+    target_link_libraries(${target} ${Pothos_LIBRARIES})
 
     #determine GrPothosUtil directory
     if(EXISTS ${CMAKE_SOURCE_DIR}/GrPothosUtil)
