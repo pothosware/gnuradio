@@ -26,6 +26,7 @@ TARGET_BLACKLIST = [
     'gnuradio-runtime', #no blocks here
     'gnuradio-pmt', #no blocks here
     'gnuradio-qtgui', #compiler errors with binding functions -- fix later
+    'gnuradio-uhd', #we have pothos-sdr
 ]
 
 NAMESPACE_BLACKLIST = [
