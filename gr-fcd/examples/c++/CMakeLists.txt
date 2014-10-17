@@ -24,12 +24,12 @@ include_directories(
     ${GR_AUDIO_INCLUDE_DIRS}
     ${GNURADIO_RUNTIME_INCLUDE_DIRS}
     ${Boost_INCLUDE_DIRS}
-	${POTHOS_INCLUDE_DIRS}
+	${Pothos_INCLUDE_DIRS}
 )
 
 add_executable(fcd_nfm_rx fcd_nfm_rx.cc)
 target_link_libraries(fcd_nfm_rx
-  gnuradio-fcd gnuradio-filter gnuradio-analog  gnuradio-audio ${POTHOS_LIBRARIES})
+  gnuradio-fcd gnuradio-filter gnuradio-analog  gnuradio-audio ${Pothos_LIBRARIES})
 
 INSTALL(TARGETS
     fcd_nfm_rx

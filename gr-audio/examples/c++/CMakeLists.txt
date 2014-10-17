@@ -22,12 +22,12 @@ include_directories(
 	${GR_ANALOG_INCLUDE_DIRS}
 	${GNURADIO_RUNTIME_INCLUDE_DIRS}
         ${Boost_INCLUDE_DIRS}
-	${POTHOS_INCLUDE_DIRS}
+	${Pothos_INCLUDE_DIRS}
 )
 
 add_executable(dial_tone dial_tone.cc)
 target_link_libraries(dial_tone
-  gnuradio-runtime gnuradio-audio gnuradio-analog ${POTHOS_LIBRARIES})
+  gnuradio-runtime gnuradio-audio gnuradio-analog ${Pothos_LIBRARIES})
 
 INSTALL(TARGETS
     dial_tone
