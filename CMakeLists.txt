@@ -240,11 +240,15 @@ if(SWIG_FOUND)
     endif()
 endif(SWIG_FOUND)
 
+#dont build python-based tools for pothos support branch
+set(GR_STOCK_BUILD FALSE)
+
 include(GrComponent)
 GR_REGISTER_COMPONENT("python-support" ENABLE_PYTHON
     PYTHONLIBS_FOUND
     SWIG_FOUND
     SWIG_VERSION_CHECK
+    GR_STOCK_BUILD
 )
 
 find_package(CppUnit)
