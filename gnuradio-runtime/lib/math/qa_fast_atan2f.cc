@@ -32,8 +32,8 @@
 
 #ifdef _MSC_VER
 #define isnan _isnan
-#else
-using std::isnan;
+#elif __cplusplus <= 199711L
+using std::isnan; //already implied in C++11
 #endif
 
 void
