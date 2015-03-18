@@ -19,7 +19,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#include "pmt_helper.h"
+#include "pothos_support.h"
 #include <Pothos/Object.hpp>
 #include <Pothos/Framework/Packet.hpp>
 #include <Poco/Types.h> //POCO_LONG_IS_64_BIT

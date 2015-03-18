@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Free Software Foundation, Inc.
+ * Copyright 2014-2015 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -20,8 +20,19 @@
  */
 
 #pragma once
-#include <Pothos/Object/Object.hpp>
+#include <Pothos/Object.hpp>
+#include <Pothos/Framework.hpp>
+#include <gnuradio/basic_block.h>
+#include <gnuradio/block.h>
 #include <pmt/pmt.h>
+
+/*!
+ * Extract the Pothos block given a pointer to the basic block.
+ */
+static inline Pothos::Block *extractPothosBlock(gr::basic_block *)
+{
+    
+}
 
 /*!
  * Conversions between Object and pmt_t types.

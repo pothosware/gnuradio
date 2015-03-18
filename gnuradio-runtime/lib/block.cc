@@ -24,6 +24,10 @@
 #include "config.h"
 #endif
 
+#ifdef POTHOS_SUPPORT
+#include "pothos_support.h"
+#endif
+
 #include <gnuradio/block.h>
 #include <gnuradio/block_registry.h>
 #include <gnuradio/block_detail.h>
@@ -179,18 +183,45 @@ namespace gr {
   void
   block::consume(int which_input, int how_many_items)
   {
+    #ifdef POTHOS_SUPPORT
+    Pothos::Block *b = extractPothosBlock(this);
+    if (b != nullptr)
+    {
+        if (how_many_items < 0) return;
+        b->input(which_input)->consume(how_many_items);
+        return;
+    }
+    #endif
     d_detail->consume(which_input, how_many_items);
   }
 
   void
   block::consume_each(int how_many_items)
   {
+    #ifdef POTHOS_SUPPORT
+    Pothos::Block *b = extractPothosBlock(this);
+    if (b != nullptr)
+    {
+        if (how_many_items < 0) return;
+        for (auto i : b->inputs()) i->consume(how_many_items);
+        return;
+    }
+    #endif
     d_detail->consume_each(how_many_items);
   }
 
   void
   block::produce(int which_output, int how_many_items)
   {
+    #ifdef POTHOS_SUPPORT
+    Pothos::Block *b = extractPothosBlock(this);
+    if (b != nullptr)
+    {
+        if (how_many_items < 0) return;
+        b->output(which_output)->produce(how_many_items);
+        return;
+    }
+    #endif
     d_detail->produce(which_output, how_many_items);
   }
 
@@ -234,6 +265,20 @@ namespace gr {
   block::add_item_tag(unsigned int which_output,
                          const tag_t &tag)
   {
+    #ifdef POTHOS_SUPPORT
+    Pothos::Block *b = extractPothosBlock(this);
+    if (b != nullptr)
+    {
+        auto outputPort = b->output(which_output);
+        Pothos::Label label;
+        label.id = pmt::symbol_to_string(tag.key);
+        label.data = pmt_to_obj(tag.value);
+        assert(tag.offset >= outputPort->totalElements());
+        label.index = tag.offset - outputPort->totalElements();
+        outputPort->postLabel(label);
+        return;
+    }
+    #endif
     d_detail->add_item_tag(which_output, tag);
   }
 
@@ -241,6 +286,20 @@ namespace gr {
   block::remove_item_tag(unsigned int which_input,
                          const tag_t &tag)
   {
+    #ifdef POTHOS_SUPPORT
+    Pothos::Block *b = extractPothosBlock(this);
+    if (b != nullptr)
+    {
+        auto inputPort = b->input(which_input);
+        for (const auto &label : inputPort->labels())
+        {
+            if (label.index + inputPort->totalElements() != tag.offset - d_attr_delay) continue;
+            if (label.id != pmt::symbol_to_string(tag.key)) continue;
+            return inputPort->removeLabel(label);
+        }
+        return;
+    }
+    #endif
     d_detail->remove_item_tag(which_input, tag, unique_id());
   }
 
@@ -258,6 +317,26 @@ namespace gr {
                            uint64_t start, uint64_t end,
                            const pmt::pmt_t &key)
   {
+    #ifdef POTHOS_SUPPORT
+    Pothos::Block *b = extractPothosBlock(this);
+    if (b != nullptr)
+    {
+        v.clear();
+        auto inputPort = b->input(which_input);
+        for (const auto &label : inputPort->labels())
+        {
+            auto offset = label.index + inputPort->totalElements() + d_attr_delay;
+            if (offset < start or offset >= end) continue;
+            tag_t tag;
+            tag.key = pmt::string_to_symbol(label.id);
+            if (pmt::is_symbol(key) and key != tag.key) continue;
+            tag.value = obj_to_pmt(label.data);
+            tag.offset = offset;
+            v.push_back(tag);
+        }
+        return;
+    }
+    #endif
     d_detail->get_tags_in_range(v, which_input, start, end, key, unique_id());
   }
 

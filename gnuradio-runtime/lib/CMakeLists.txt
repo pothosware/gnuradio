@@ -164,12 +164,16 @@ if (Pothos_FOUND)
     message(STATUS "Pothos_INCLUDE_DIRS: ${Pothos_INCLUDE_DIRS}")
     message(STATUS "Pothos_LIBRARIES: ${Pothos_LIBRARIES}")
 
+    set(GR_POTHOS_SUPPORT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/pothos)
+    add_definitions(-DPOTHOS_SUPPORT)
+    include_directories(${GR_POTHOS_SUPPORT_DIR})
     include_directories(${Pothos_INCLUDE_DIRS})
     list(APPEND gnuradio_runtime_libs ${Pothos_LIBRARIES})
     list(APPEND gnuradio_runtime_sources
-        pmt_helper.cc
+        ${GR_POTHOS_SUPPORT_DIR}/pothos_block.cc
+        ${GR_POTHOS_SUPPORT_DIR}/pothos_pmt_helper.cc
+        ${GR_POTHOS_SUPPORT_DIR}/pothos_block_executor.cc
     )
-    add_definitions(-DPOTHOS_SUPPORT)
 
 else (Pothos_FOUND)
 
