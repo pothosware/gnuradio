@@ -151,6 +151,37 @@ if(LINUX)
 endif()
 
 ########################################################################
+# Pothos support
+########################################################################
+message(STATUS "######################################################")
+message(STATUS "## Configuring Pothos support")
+message(STATUS "######################################################")
+find_package(Pothos CONFIG)
+
+if (Pothos_FOUND)
+
+    message(STATUS "Pothos support enabled:")
+    message(STATUS "Pothos_INCLUDE_DIRS: ${Pothos_INCLUDE_DIRS}")
+    message(STATUS "Pothos_LIBRARIES: ${Pothos_LIBRARIES}")
+
+    include_directories(${Pothos_INCLUDE_DIRS})
+    list(APPEND gnuradio_runtime_libs ${Pothos_LIBRARIES})
+    list(APPEND gnuradio_runtime_sources
+        pmt_helper.cc
+    )
+    add_definitions(-DPOTHOS_SUPPORT)
+
+else (Pothos_FOUND)
+
+    message(WARNING "Pothos support disabled!")
+
+endif (Pothos_FOUND)
+
+message(STATUS "")
+message(STATUS "")
+message(STATUS "")
+
+########################################################################
 # Add DLL resource file when using MSVC
 ########################################################################
 
