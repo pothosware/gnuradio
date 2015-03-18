@@ -27,11 +27,36 @@
 #include <pmt/pmt.h>
 
 /*!
+ * The extended_io_signature is cast-able to gr::io_signature,
+ * and contains extra pointer information for pothos support.
+ */
+struct extended_io_signature
+{
+    extended_io_signature(gr::io_signature::sptr sig):
+        d_min_streams(sig->min_streams()),
+        d_max_streams(sig->max_streams()),
+        d_sizeof_stream_item(sig->sizeof_stream_items()){}
+
+    //io_signature ABI
+    int			d_min_streams;
+    int			d_max_streams;
+    std::vector<int>	d_sizeof_stream_item;
+
+    //extended info
+    gr::basic_block *basic_block;
+    Pothos::Block *pothos_block;
+};
+
+/*!
  * Extract the Pothos block given a pointer to the basic block.
  */
-static inline Pothos::Block *extractPothosBlock(gr::basic_block *)
+static inline Pothos::Block *extractPothosBlock(gr::basic_block *b)
 {
-    
+    //when constructed through GrPothosBlock, the input_signature contains extra block pointers
+    //we can verify this by checking the basic block pointer to determine pothos enabled block
+    auto ptrs = reinterpret_cast<const extended_io_signature *>(b->input_signature().get());
+    if (ptrs->basic_block != b) return nullptr;
+    return ptrs->pothos_block;
 }
 
 /*!

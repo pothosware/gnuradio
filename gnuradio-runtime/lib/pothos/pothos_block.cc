@@ -121,6 +121,12 @@ GrPothosBlock::GrPothosBlock(gr::block *block):
 
     Pothos::Block::registerCall(this, POTHOS_FCN_TUPLE(GrPothosBlock, __setNumInputs));
     Pothos::Block::registerCall(this, POTHOS_FCN_TUPLE(GrPothosBlock, __setNumOutputs));
+
+    //modified input signature so extractPothosBlock() can detect pothos enabled block
+    auto new_input_signature = new extended_io_signature(d_input_signature);
+    new_input_signature->basic_block = d_block;
+    new_input_signature->pothos_block = this;
+    d_block->d_input_signature.reset(reinterpret_cast<gr::io_signature *>(new_input_signature));
 }
 
 GrPothosBlock::~GrPothosBlock(void)
