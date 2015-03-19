@@ -338,6 +338,7 @@ list(APPEND GR_TEST_PYTHON_DIRS
 ########################################################################
 add_subdirectory(docs)
 add_subdirectory(gnuradio-runtime)
+add_subdirectory(gr-pothos)
 add_subdirectory(gr-blocks)
 add_subdirectory(grc)
 add_subdirectory(gr-fec)
