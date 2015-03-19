@@ -74,12 +74,12 @@ static Pothos::DType inferDType(const size_t ioSize, const std::string &name, co
 class GrPothosBlock : public Pothos::Block
 {
 public:
-    Pothos::Block *make(gr::block *block)
+    static Pothos::Block *make(boost::shared_ptr<gr::block> block)
     {
         return new GrPothosBlock(block);
     }
 
-    GrPothosBlock(gr::block *block);
+    GrPothosBlock(boost::shared_ptr<gr::block> block);
     ~GrPothosBlock(void);
     void __setNumInputs(size_t);
     void __setNumOutputs(size_t);
@@ -91,14 +91,14 @@ public:
     Pothos::BufferManager::Sptr getOutputBufferManager(const std::string &name, const std::string &domain);
 
 private:
-    gr::block *d_block;
+    boost::shared_ptr<gr::block> d_block;
     gr::pothos_block_executor *d_exec;
 };
 
 /***********************************************************************
  * init the name and ports -- called by the block constructor
  **********************************************************************/
-GrPothosBlock::GrPothosBlock(gr::block *block):
+GrPothosBlock::GrPothosBlock(boost::shared_ptr<gr::block> block):
     d_block(block)
 {
     Pothos::Block::setName(d_block->name());
@@ -124,7 +124,7 @@ GrPothosBlock::GrPothosBlock(gr::block *block):
 
     //modified input signature so extractPothosBlock() can detect pothos enabled block
     auto new_input_signature = new extended_io_signature(d_input_signature);
-    new_input_signature->basic_block = d_block;
+    new_input_signature->basic_block = d_block.get();
     new_input_signature->pothos_block = this;
     d_block->d_input_signature.reset(reinterpret_cast<gr::io_signature *>(new_input_signature));
 }

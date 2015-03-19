@@ -1,46 +1,10 @@
 //this is a machine generated file...
 
 \#include <Pothos/Framework.hpp>
+\#include <Pothos/Proxy.hpp>
 \#include <gnuradio/block.h>
 
 using namespace gr;
-
-/***********************************************************************
- * helpers
- * http://stackoverflow.com/questions/6326757/conversion-from-boostshared-ptr-to-stdshared-ptr
- **********************************************************************/
-\#include <boost/shared_ptr.hpp>
-\#include <memory>
-
-namespace {
-    template<class SharedPointer> struct Holder {
-        SharedPointer p;
-
-        Holder(const SharedPointer &p) : p(p) {}
-        Holder(const Holder &other) : p(other.p) {}
-        Holder(Holder &&other) : p(std::move(other.p)) {}
-
-        void operator () (...) { p.reset(); }
-    };
-}
-
-template<class T> std::shared_ptr<T> to_std_ptr(const boost::shared_ptr<T> &p) {
-    typedef Holder<std::shared_ptr<T>> H;
-    if(H *h = boost::get_deleter<H, T>(p)) {
-        return h->p;
-    } else {
-        return std::shared_ptr<T>(p.get(), Holder<boost::shared_ptr<T>>(p));
-    }
-}
-
-template<class T> boost::shared_ptr<T> to_boost_ptr(const std::shared_ptr<T> &p){
-    typedef Holder<boost::shared_ptr<T>> H;
-    if(H * h = std::get_deleter<H, T>(p)) {
-        return h->p;
-    } else {
-        return boost::shared_ptr<T>(p.get(), Holder<std::shared_ptr<T>>(p));
-    }
-}
 
 /***********************************************************************
  * include block definitions
@@ -48,6 +12,18 @@ template<class T> boost::shared_ptr<T> to_boost_ptr(const std::shared_ptr<T> &p)
 #for $header in $headers
 \#include "$header"
 #end for
+
+/***********************************************************************
+ * make GrPothosBlock wrapper with a gr::block
+ **********************************************************************/
+template <typename BlockType>
+std::shared_ptr<Pothos::Block> makeGrPothosBlock(boost::shared_ptr<BlockType> block)
+{
+    auto block_ptr = boost::dynamic_pointer_cast<gr::block>(block);
+    auto env = Pothos::ProxyEnvironment::make("managed");
+    auto registry = env->findProxy("Pothos/BlockRegistry");
+    return registry.call<std::shared_ptr<Pothos::Block>>("/gnuradio/block", block_ptr);
+}
 
 /***********************************************************************
  * create block factories
@@ -60,13 +36,14 @@ using namespace $factory.namespace;
 static std::shared_ptr<Pothos::Block> factory__$(factory.name)($factory.exported_factory_args)
 {
     auto __block = $(factory.factory_function_path)($factory.internal_factory_args);
+    auto __pothos_block = makeGrPothosBlock(__block);
     #if $factory.block_methods
     auto __block_ref = std::ref(*static_cast<$factory.namespace::$factory.className *>(__block.get()));
     #end if
     #for $method in $factory.block_methods
-    __block->registerCallable("$method.name", Pothos::Callable(&$factory.namespace::$factory.className::$method.name).bind(__block_ref, 0));
+    __pothos_block->registerCallable("$method.name", Pothos::Callable(&$factory.namespace::$factory.className::$method.name).bind(__block_ref, 0));
     #end for
-    return to_std_ptr(boost::dynamic_pointer_cast<Pothos::Block>(__block));
+    return __pothos_block;
 }
 #end for
 

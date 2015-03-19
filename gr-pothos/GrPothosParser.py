@@ -49,11 +49,6 @@ def glob_recurse(base, filt):
       for filename in fnmatch.filter(filenames, filt):
           yield os.path.join(root, filename)
 
-def find_dir_root(path, dirname):
-    if os.path.dirname(path) == path: raise Exception('find_dir_root FAIL')
-    if dirname in os.listdir(path): return os.path.join(path, dirname)
-    return find_dir_root(os.path.dirname(path), dirname)
-
 ########################################################################
 ## single header inspection
 ########################################################################
@@ -138,7 +133,7 @@ def inspect_header(header_path):
     pp_tokens = list()
     for line in contents.splitlines():
         line = line.strip()
-        if line.startswith('class'):
+        if line.startswith('class '):
             api_decl = line.split()[1].strip()
             if api_decl.isupper(): pp_tokens.append(api_decl)
     for tok in set(pp_tokens): contents = contents.replace(tok, '')
@@ -157,9 +152,9 @@ def inspect_header(header_path):
 
     return header_path, cppHeader
 
-def gather_header_data(tree_paths):
+def gather_header_data(tree_paths, glob='*.h'):
     for tree_path in tree_paths:
-        for header in glob_recurse(find_dir_root(tree_path, 'include'), "*.h"):
+        for header in glob_recurse(tree_path, glob):
             yield inspect_header(os.path.abspath(header))
 
 def query_block_classes(cppHeader):
@@ -185,9 +180,9 @@ import xmltodict
 import difflib
 import copy
 
-def gather_grc_data(tree_paths):
+def gather_grc_data(tree_paths, glob='*.xml'):
     for tree_path in tree_paths:
-        for xml_file in glob_recurse(find_dir_root(tree_path, 'grc'), "*.xml"):
+        for xml_file in glob_recurse(tree_path, glob):
             yield os.path.splitext(os.path.basename(xml_file))[0], xmltodict.parse(open(xml_file).read())
 
 def getGrcFileMatch(className, classInfo, grc_files):
@@ -534,7 +529,7 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
 
     return factoryInfo, blockDesc
 
-def createMetaBlockInfo(grc_file, info):
+def createMetaBlockInfo(grc_data, grc_file, info):
 
     #create a new type parameter for the new block desc
     type_param = None
@@ -603,10 +598,20 @@ def main():
     parser = OptionParser()
     parser.add_option("--out", dest="out_path", help="output file path or 'stdout'")
     parser.add_option("--target", help="associated cmake library target name")
+    parser.add_option("--prefix", help="installation prefix for gnuradio")
     (options, args) = parser.parse_args()
     out_path = options.out_path
-    tree_paths = args
-    header("GrPothosUtil begin: target=%s, out=%s", options.target, out_path)
+    grc_path = os.path.join(options.prefix, 'share', 'gnuradio', 'grc', 'blocks')
+    header_path = os.path.join(options.prefix, 'include', 'gnuradio', options.target)
+    header("GrPothosUtil begin: prefix=%s, target=%s, out=%s", options.prefix, options.target, out_path)
+
+    #check paths
+    if not os.path.exists(grc_path):
+        error("grc path does not exist: " + grc_path)
+        return
+    if not os.path.exists(header_path):
+        error("gnuradio includes path does not exist: " + header_path)
+        return
 
     #generator information
     headers = list()
@@ -622,11 +627,11 @@ def main():
     #otherwise continue to parse
     else:
         #extract grc metadata
-        grc_data = dict(gather_grc_data(tree_paths))
+        grc_data = dict(gather_grc_data([grc_path], glob=options.target+"_*.xml"))
         key_to_categories = grcBlockKeyToCategoryMap(grc_data)
 
         #extract header data
-        header_data = gather_header_data(tree_paths)
+        header_data = gather_header_data([header_path])
 
         #extract info for each block class
         grc_file_to_meta_group = dict()
@@ -646,14 +651,16 @@ def main():
         for grc_file, info in grc_file_to_meta_group.iteritems():
             if len(info) > 1:
                 try:
-                    metaFactory, metaBlockDesc = createMetaBlockInfo(grc_file, info)
+                    metaFactory, metaBlockDesc = createMetaBlockInfo(grc_data, grc_file, info)
                     blockDescs.append(metaBlockDesc)
                     for factory, blockDesc in info:
                         factories.append(factory)
                     meta_factories.append(metaFactory)
                     registrations.append(metaFactory) #uses keys: name and path
 
-                except Exception as ex: error(str(ex))
+                except Exception as ex:
+                    error(str(ex))
+                    #print traceback.format_exc()
             else:
                 for factory, blockDesc in info:
                     factories.append(factory)

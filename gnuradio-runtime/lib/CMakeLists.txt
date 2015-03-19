@@ -174,6 +174,10 @@ if (Pothos_FOUND)
         ${GR_POTHOS_SUPPORT_DIR}/pothos_pmt_helper.cc
         ${GR_POTHOS_SUPPORT_DIR}/pothos_block_executor.cc
     )
+    #hide lots of warnings caused by logger on every file
+    if (CMAKE_COMPILER_IS_GNUCXX)
+        add_definitions(-Wno-unused-parameter)
+    endif()
 
 else (Pothos_FOUND)
 
