@@ -82,5 +82,11 @@ GR_PYTHON_INSTALL(
     COMPONENT "pothos_python"
 )
 
+INSTALL(
+    FILES cmake/CMakeLists.txt
+    DESTINATION share/cmake/gr-pothos
+    COMPONENT "pothos_python"
+)
+
 endif(ENABLE_POTHOS)
 
