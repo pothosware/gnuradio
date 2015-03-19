@@ -187,7 +187,6 @@ endif (Pothos_FOUND)
 
 message(STATUS "")
 message(STATUS "")
-message(STATUS "")
 
 ########################################################################
 # Add DLL resource file when using MSVC

@@ -83,6 +83,11 @@ if (NOT Pothos_FOUND)
     message(FATAL "Requires Pothos")
 endif()
 
+#hide lots of warnings caused by logger on every file
+if (CMAKE_COMPILER_IS_GNUCXX)
+    add_definitions(-Wno-unused-parameter)
+endif()
+
 ########################################################################
 # Setup boost
 ########################################################################

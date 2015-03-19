@@ -364,6 +364,10 @@ def get_as_list(data, key):
     if not isinstance(out, list): out = [out]
     return out
 
+def evalToJSON(opt):
+    try: return json.loads(opt)
+    except: return '"%s"'%opt
+
 def fromGrcParam(grc_param):
     param_d = dict(key=grc_param['key'])
     try: param_d['name'] = grc_param['name']
@@ -376,7 +380,7 @@ def fromGrcParam(grc_param):
     if param_type == 'int': param_d['widgetType'] = 'SpinBox'
     options = get_as_list(grc_param, 'option')
     if options:
-        param_d['options'] = [dict(name=o['name'], value='"%s"'%o['key']) for o in options]
+        param_d['options'] = [dict(name=o['name'], value=evalToJSON(o['key'])) for o in options]
         param_d['widgetType'] = 'ComboBox'
         param_d['widgetKwargs'] = dict(editable=param_type != 'enum')
     return param_d
@@ -476,7 +480,7 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
             if param_d['key'] in param_key_to_type and enum['name'] in param_key_to_type[param_d['key']]:
                 param_d['options'] = list()
                 for value in enum['values']:
-                    param_d['options'].append(dict(name=value['name'], value='"%s"'%value['name']))
+                    param_d['options'].append(dict(name=value['name'], value=evalToJSON(value['name'])))
                 if param_d['options'] and 'default' in param_d: del param_d['default'] #let gui pick automatic default
 
     #factory
