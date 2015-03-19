@@ -40,6 +40,13 @@
 static Pothos::DType inferDType(const size_t ioSize, const std::string &name, const bool isInput)
 {
     Pothos::DType dtype("custom", ioSize); //default if we cant figure it out
+
+    //make a guess based on size and the usual types
+    if ((ioSize%sizeof(gr_complex)) == 0) dtype = Pothos::DType(typeid(gr_complex), ioSize/sizeof(gr_complex));
+    else if ((ioSize%sizeof(float)) == 0) dtype = Pothos::DType(typeid(float), ioSize/sizeof(float));
+    else if ((ioSize%sizeof(short)) == 0) dtype = Pothos::DType(typeid(short), ioSize/sizeof(short));
+    else if ((ioSize%sizeof(char)) == 0) dtype = Pothos::DType(typeid(char), ioSize/sizeof(char));
+
     const auto lastUnder = name.find_last_of("_");
     if (lastUnder == std::string::npos) return dtype;
 
