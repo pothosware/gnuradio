@@ -604,18 +604,22 @@ def main():
     parser.add_option("--target", help="associated cmake library target name")
     parser.add_option("--prefix", help="installation prefix for gnuradio")
     (options, args) = parser.parse_args()
+
+    #check input
+    if options.target is None: raise Exception('GrPothosUtil requires --target')
+    if options.prefix is None: raise Exception('GrPothosUtil requires --prefix')
     out_path = options.out_path
-    grc_path = os.path.join(options.prefix, 'share', 'gnuradio', 'grc', 'blocks')
-    header_path = os.path.join(options.prefix, 'include', 'gnuradio', options.target)
     header("GrPothosUtil begin: prefix=%s, target=%s, out=%s", options.prefix, options.target, out_path)
 
     #check paths
+    grc_path = os.path.join(options.prefix, 'share', 'gnuradio', 'grc', 'blocks')
+    header_path = os.path.join(options.prefix, 'include', 'gnuradio', options.target)
     if not os.path.exists(grc_path):
         error("grc path does not exist: " + grc_path)
-        return
+        exit(-1)
     if not os.path.exists(header_path):
         error("gnuradio includes path does not exist: " + header_path)
-        return
+        exit(-1)
 
     #generator information
     headers = list()

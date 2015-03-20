@@ -1,3 +1,14 @@
+#!/usr/bin/env python
+
+import os
+import sys
+from distutils import sysconfig
+
+#setup the python path for this gnuradio install
+pylibdir = sysconfig.get_python_lib(plat_specific=True, prefix='')
+prefix = os.path.dirname(os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(prefix, pylibdir))
+
 if __name__ == '__main__':
     from gnuradio import pothos
     pothos.main()
