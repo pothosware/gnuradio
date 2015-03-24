@@ -34,6 +34,20 @@
 #include <cctype>
 #include <iostream>
 
+//math compat functions for older msvc
+#if defined(_MSC_VER) && (_MSC_VER <= 1700)
+
+namespace std
+{
+    template <typename T>
+    long long int llround(const T x)
+    {
+        return (long long int)((x < T(0.0)) ? (x - T(0.5)) : (x + T(0.5)));
+    }
+}
+
+#endif
+
 /***********************************************************************
  * try our best to infer the data type given the info at hand
  **********************************************************************/
