@@ -166,6 +166,10 @@ if (Pothos_FOUND)
 
     set(GR_POTHOS_SUPPORT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/pothos)
     add_definitions(-DPOTHOS_SUPPORT)
+    if (MSVC)
+        #fix The C++ Standard Library forbids macroizing keywords
+        add_definitions(-D_XKEYCHECK_H)
+    endif (MSVC)
     include_directories(${GR_POTHOS_SUPPORT_DIR})
     include_directories(${Pothos_INCLUDE_DIRS})
     list(APPEND gnuradio_runtime_libs ${Pothos_LIBRARIES})
