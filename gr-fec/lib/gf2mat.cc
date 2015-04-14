@@ -22,6 +22,7 @@
 
 #include <gnuradio/fec/gf2mat.h>
 #include <iostream>
+#include <ciso646> //xor
 
 GF2Mat::GF2Mat(int m, int n) {
     M = m;
