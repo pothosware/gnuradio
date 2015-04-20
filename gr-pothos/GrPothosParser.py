@@ -365,6 +365,8 @@ def get_as_list(data, key):
     return out
 
 def evalToJSON(opt):
+    if opt == "True": return True
+    if opt == "False": return False
     try: return json.loads(opt)
     except: return '"%s"'%opt
 
