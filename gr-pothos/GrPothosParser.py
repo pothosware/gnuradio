@@ -397,7 +397,7 @@ def getBlockInfo(className, classInfo, cppHeader, blockData, key_to_categories):
     raw_factory = find_factory_function(className, classInfo, cppHeader)
     if not raw_factory:
         raise Exception('Cant find factory function for %s'%className)
-    if 'parent' in raw_factory: factory_path = [className, className, raw_factory['name']]
+    if 'parent' in raw_factory: factory_path = [className, raw_factory['name']]
     else: factory_path = [raw_factory['namespace'], raw_factory['name']]
 
     #determine calls (methods that arent getters)
