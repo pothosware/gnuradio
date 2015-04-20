@@ -66,8 +66,8 @@ endif()
 # locate utils
 ########################################################################
 find_program(GR_POTHOS_UTIL_EXE
-	NAMES GrPothosUtil GrPothosUtil.py
-	PATHS ${GR_ROOT}/bin NO_DEFAULT_PATH)
+    NAMES GrPothosUtil GrPothosUtil.py
+    PATHS ${GR_ROOT}/bin NO_DEFAULT_PATH)
 if (NOT GR_POTHOS_UTIL_EXE)
     message(FATAL "Cannot locate GrPothosUtil in ${GR_ROOT}/bin")
 endif()
@@ -89,6 +89,10 @@ endif()
 if (CMAKE_COMPILER_IS_GNUCXX)
     add_definitions(-Wno-unused-parameter)
 endif()
+
+if(MSVC)
+    add_definitions(/bigobj) #arithmetic too large in debug mode
+endif(MSVC)
 
 ########################################################################
 # Setup boost
@@ -128,8 +132,10 @@ endif()
 ADD_DEFINITIONS(-DBOOST_ALL_DYN_LINK)
 
 include_directories(${Boost_INCLUDE_DIRS})
+link_directories(${Boost_LIBRARY_DIRS})
 
 message(STATUS "Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
+message(STATUS "Boost_LIBRARY_DIRS: ${Boost_LIBRARY_DIRS}")
 message(STATUS "Boost_LIBRARIES: ${Boost_LIBRARIES}")
 
 ########################################################################
