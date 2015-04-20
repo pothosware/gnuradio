@@ -5,6 +5,8 @@
 #ifndef _MSC_CONFIG_H_ // [
 #define _MSC_CONFIG_H_
 
+#include <ciso646> //and, or, xor
+
 ////////////////////////////////////////////////////////////////////////
 // enable M_* constants by setting _USE_MATH_DEFINES before math.h
 // if this fails, the M_* constants are also defined below
