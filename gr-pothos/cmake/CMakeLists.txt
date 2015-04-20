@@ -65,7 +65,9 @@ endif()
 ########################################################################
 # locate utils
 ########################################################################
-find_program(GR_POTHOS_UTIL_EXE GrPothosUtil PATHS ${GR_ROOT}/bin NO_DEFAULT_PATH)
+find_program(GR_POTHOS_UTIL_EXE
+	NAMES GrPothosUtil GrPothosUtil.py
+	PATHS ${GR_ROOT}/bin NO_DEFAULT_PATH)
 if (NOT GR_POTHOS_UTIL_EXE)
     message(FATAL "Cannot locate GrPothosUtil in ${GR_ROOT}/bin")
 endif()
@@ -188,7 +190,7 @@ foreach (comp_name ${COMP_NAMES})
             --target=${comp_name}
             --prefix=${GR_ROOT}
             --out=${wrapper_output}
-        DEPENDS ${headers} ${grc_blocks}
+        DEPENDS ${GR_POTHOS_UTIL_EXE} ${headers} ${grc_blocks}
     )
 
     POTHOS_MODULE_UTIL(
