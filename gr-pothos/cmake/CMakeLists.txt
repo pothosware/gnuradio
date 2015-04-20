@@ -91,7 +91,8 @@ if (CMAKE_COMPILER_IS_GNUCXX)
 endif()
 
 if(MSVC)
-    add_definitions(/bigobj) #arithmetic too large in debug mode
+    add_definitions(/bigobj) #very large generated files
+    add_definitions(-D_VARIADIC_MAX=10) #for function binding
 endif(MSVC)
 
 ########################################################################
