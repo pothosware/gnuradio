@@ -104,6 +104,8 @@ endfunction(GR_SWIG_MAKE_DOCS)
 ########################################################################
 macro(GR_SWIG_MAKE name)
     if (NOSWIG)
+        execute_process(COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/gr_${name}_doc.i)
+        execute_process(COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/${name}_doc.i)
     else (NOSWIG)
 
     set(ifiles ${ARGN})
