@@ -82,8 +82,16 @@ GR_PYTHON_INSTALL(
     COMPONENT "pothos_python"
 )
 
+########################################################################
+# Install bindings project
+########################################################################
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CMakeLists.txt
+    ${CMAKE_CURRENT_BINARY_DIR}/CMakeLists.txt
+@ONLY)
+
 INSTALL(
-    FILES cmake/CMakeLists.txt
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/CMakeLists.txt
     DESTINATION share/cmake/gr-pothos
     COMPONENT "pothos_python"
 )

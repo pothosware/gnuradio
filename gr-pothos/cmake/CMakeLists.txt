@@ -47,6 +47,7 @@ endforeach (lib)
 if (NOT GR_ROOT)
     get_filename_component(GR_ROOT "${GNURADIO_RUNTIME_INCLUDE_DIRS}/.." ABSOLUTE)
 endif ()
+set(GR_PYTHON_ROOT "${GR_ROOT}/@GR_PYTHON_DIR@")
 set(GR_INCLUDE_ROOT ${GR_ROOT}/include/gnuradio)
 set(GRC_BLOCKS_ROOT ${GR_ROOT}/share/gnuradio/grc/blocks)
 
@@ -190,6 +191,7 @@ foreach (comp_name ${COMP_NAMES})
 
     file(GLOB_RECURSE headers "${GR_INCLUDE_ROOT}/${comp_name}/*.h")
     file(GLOB_RECURSE grc_blocks "${GRC_BLOCKS_ROOT}/${comp_name}_*.xml")
+    file(GLOB_RECURSE parser_files "${GR_PYTHON_ROOT}/gnuradio/pothos/*.py")
 
     add_custom_command(
         OUTPUT ${wrapper_output}
@@ -197,7 +199,11 @@ foreach (comp_name ${COMP_NAMES})
             --target=${comp_name}
             --prefix=${GR_ROOT}
             --out=${wrapper_output}
-        DEPENDS ${GR_POTHOS_UTIL_EXE} ${headers} ${grc_blocks}
+        DEPENDS
+            ${GR_POTHOS_UTIL_EXE}
+            ${parser_files}
+            ${headers}
+            ${grc_blocks}
     )
 
     POTHOS_MODULE_UTIL(
