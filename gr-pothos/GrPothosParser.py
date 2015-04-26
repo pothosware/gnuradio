@@ -372,13 +372,16 @@ def evalToJSON(opt):
 
 def fromGrcParam(grc_param):
     param_d = dict(key=grc_param['key'])
-    try: param_d['name'] = grc_param['name']
+    try: param_d['name'] = grc_param['name'] or "" #handles None
     except KeyError: pass
-    try: param_d['default'] = grc_param['value']
+    try: param_d['default'] = grc_param['value'] or "" #handles None
     except KeyError: pass
     if 'hide' in grc_param: param_d['preview'] = 'disable'
     param_type = grc_param['type']
-    if param_type == 'string': param_d['widgetType'] = 'StringEntry'
+    if param_type == 'string':
+        param_d['widgetType'] = 'StringEntry'
+        #must add quotes for the string-based values
+        if param_d.has_key('default'): param_d['default'] = '"%s"'%param_d['default']
     if param_type == 'int': param_d['widgetType'] = 'SpinBox'
     options = get_as_list(grc_param, 'option')
     if options:
