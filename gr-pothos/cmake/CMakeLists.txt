@@ -186,29 +186,38 @@ endforeach (inc_dir)
 ########################################################################
 foreach (comp_name ${COMP_NAMES})
 
-    set(wrapper_output
-        ${CMAKE_CURRENT_BINARY_DIR}/${comp_name}_wrapper.cc)
+    set(registration_output
+        ${CMAKE_CURRENT_BINARY_DIR}/${comp_name}_registrations.cc)
+    set(description_output
+        ${CMAKE_CURRENT_BINARY_DIR}/${comp_name}_descriptions.cc)
 
     file(GLOB_RECURSE headers "${GR_INCLUDE_ROOT}/${comp_name}/*.h")
     file(GLOB_RECURSE grc_blocks "${GRC_BLOCKS_ROOT}/${comp_name}_*.xml")
     file(GLOB_RECURSE parser_files "${GR_PYTHON_ROOT}/gnuradio/pothos/*.py")
+    file(GLOB_RECURSE parser_tmpls "${GR_PYTHON_ROOT}/gnuradio/pothos/*.tmpl.cpp")
 
     add_custom_command(
-        OUTPUT ${wrapper_output}
+        OUTPUT
+            ${registration_output}
+            ${description_output}
         COMMAND ${GR_POTHOS_UTIL_EXE}
             --target=${comp_name}
             --prefix=${GR_ROOT}
-            --out=${wrapper_output}
+            --regs=${registration_output}
+            --descs=${description_output}
         DEPENDS
             ${GR_POTHOS_UTIL_EXE}
             ${parser_files}
+            ${parser_tmpls}
             ${headers}
             ${grc_blocks}
     )
 
     POTHOS_MODULE_UTIL(
         TARGET ${comp_name}Wrapper
-        SOURCES ${wrapper_output}
+        SOURCES
+            ${registration_output}
+            ${description_output}
         LIBRARIES
             ${${comp_name}_LIBRARY}
             ${GNURADIO_LIBRARIES}

@@ -167,10 +167,11 @@ def query_block_classes(cppHeader):
 ## class info into a C++ source
 ########################################################################
 REGISTRATION_TMPL_FILE = os.path.join(os.path.dirname(__file__), 'registration.tmpl.cpp')
+DESCRIPTION_TMPL_FILE = os.path.join(os.path.dirname(__file__), 'description.tmpl.cpp')
 from Cheetah import Template
 
-def classInfoIntoRegistration(**kwargs):
-    tmpl_str = open(REGISTRATION_TMPL_FILE, 'r').read()
+def templateGenerate(tmplFile, **kwargs):
+    tmpl_str = open(tmplFile, 'r').read()
     return str(Template.Template(tmpl_str, kwargs))
 
 ########################################################################
@@ -605,7 +606,8 @@ def main():
 
     #parse the input arguments
     parser = OptionParser()
-    parser.add_option("--out", dest="out_path", help="output file path or 'stdout'")
+    parser.add_option("--regs", dest="reg_out_path", help="block registration output file path or 'stdout'")
+    parser.add_option("--descs", dest="desc_out_path", help="block descriptions output file path or 'stdout'")
     parser.add_option("--target", help="associated cmake library target name")
     parser.add_option("--prefix", help="installation prefix for gnuradio")
     (options, args) = parser.parse_args()
@@ -613,8 +615,9 @@ def main():
     #check input
     if options.target is None: raise Exception('GrPothosUtil requires --target')
     if options.prefix is None: raise Exception('GrPothosUtil requires --prefix')
-    out_path = options.out_path
-    header("GrPothosUtil begin: prefix=%s, target=%s, out=%s", options.prefix, options.target, out_path)
+    reg_out_path = options.reg_out_path
+    desc_out_path = options.desc_out_path
+    header("GrPothosUtil begin: prefix=%s, target=%s, out=%s,%s", options.prefix, options.target, reg_out_path, desc_out_path)
 
     #check paths
     grc_path = os.path.join(options.prefix, 'share', 'gnuradio', 'grc', 'blocks')
@@ -680,19 +683,24 @@ def main():
                     registrations.append(factory) #uses keys: name and path
                     blockDescs.append(blockDesc)
 
-    #generate output source
-    output = classInfoIntoRegistration(
+    #generate block registrations
+    registrationOutput = templateGenerate(REGISTRATION_TMPL_FILE,
         headers=set(headers+ENUM_HEADERS),
         enums=DISCOVERED_ENUMS,
         factories=factories,
         meta_factories=meta_factories,
         registrations=registrations,
+    )
+    if reg_out_path:
+        if reg_out_path == 'stdout': print(registrationOutput)
+        else: open(reg_out_path, 'w').write(registrationOutput)
+
+    #generate block descriptions
+    descriptionsOutput = templateGenerate(DESCRIPTION_TMPL_FILE,
         #FIXME having an issue with POCO stringify and unicode chars
         #just escape out the unicode escape for now to avoid issues...
         blockDescs=dict([(desc['path'], json.dumps(desc).replace('\\u', '\\\\u')) for desc in blockDescs]),
     )
-
-    #send output to file or stdout
-    if out_path:
-        if out_path == 'stdout': print(output)
-        else: open(out_path, 'w').write(output)
+    if desc_out_path:
+        if desc_out_path == 'stdout': print(descriptionsOutput)
+        else: open(desc_out_path, 'w').write(descriptionsOutput)

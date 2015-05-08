@@ -72,6 +72,7 @@ GR_PYTHON_INSTALL(
 INSTALL(
     FILES
         registration.tmpl.cpp
+        description.tmpl.cpp
     DESTINATION ${GR_PYTHON_DIR}/gnuradio/pothos
     COMPONENT "pothos_python"
 )
