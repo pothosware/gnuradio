@@ -90,7 +90,11 @@ if(CMAKE_COMPILER_IS_GNUCXX)
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
 if(MSVC)
-    include_directories(${CMAKE_SOURCE_DIR}/cmake/msvc) #missing headers
+    if ("${MSVC_VERSION}" VERSION_LESS "1800")
+        include_directories(${CMAKE_SOURCE_DIR}/cmake/msvc) #missing headers
+    else()
+        include_directories(${CMAKE_SOURCE_DIR}/cmake/msvc2013) #missing headers
+    endif()
     add_definitions(-D_WIN32_WINNT=0x0502) #Minimum version: "Windows Server 2003 with SP1, Windows XP with SP2"
     add_definitions(-DNOMINMAX) #disables stupidity and enables std::min and std::max
     add_definitions( #stop all kinds of compatibility warnings

@@ -24,6 +24,10 @@
 #include "config.h"
 #endif
 
+#ifdef POTHOS_SUPPORT
+#include "pothos_support.h"
+#endif
+
 #include <gnuradio/basic_block.h>
 #include <gnuradio/block_registry.h>
 #include <gnuradio/logger.h>
@@ -97,6 +101,15 @@ namespace gr {
     }
     msg_queue[port_id] = msg_queue_t();
     msg_queue_ready[port_id] = boost::shared_ptr<boost::condition_variable>(new boost::condition_variable());
+    #ifdef POTHOS_SUPPORT
+    Pothos::Block *b = extractPothosBlock(this);
+    if (b != nullptr)
+    {
+        if (pmt::symbol_to_string(port_id) == "system") return; //ignore ubiquitous system port
+        b->setupInput(pmt::symbol_to_string(port_id));
+        return;
+    }
+    #endif
   }
 
   pmt::pmt_t
@@ -122,6 +135,14 @@ namespace gr {
       throw std::runtime_error("message_port_register_out: port already in use");
     }
     d_message_subscribers = pmt::dict_add(d_message_subscribers, port_id, pmt::PMT_NIL);
+    #ifdef POTHOS_SUPPORT
+    Pothos::Block *b = extractPothosBlock(this);
+    if (b != nullptr)
+    {
+        b->setupOutput(pmt::symbol_to_string(port_id));
+        return;
+    }
+    #endif
   }
 
   pmt::pmt_t
@@ -142,6 +163,15 @@ namespace gr {
     if(!pmt::dict_has_key(d_message_subscribers, port_id)) {
       throw std::runtime_error("port does not exist");
     }
+
+    #ifdef POTHOS_SUPPORT
+    Pothos::Block *b = extractPothosBlock(this);
+    if (b != nullptr)
+    {
+        b->output(pmt::symbol_to_string(port_id))->postMessage(pmt_to_obj(msg));
+        return;
+    }
+    #endif
 
     pmt::pmt_t currlist = pmt::dict_ref(d_message_subscribers, port_id, pmt::PMT_NIL);
     // iterate through subscribers on port
