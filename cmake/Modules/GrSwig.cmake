@@ -103,6 +103,9 @@ endfunction(GR_SWIG_MAKE_DOCS)
 #   - GR_SWIG_DOC_DIRS
 ########################################################################
 macro(GR_SWIG_MAKE name)
+    if (NOSWIG)
+    else (NOSWIG)
+
     set(ifiles ${ARGN})
 
     # Shimming this in here to take care of a SWIG bug with handling
@@ -176,6 +179,7 @@ macro(GR_SWIG_MAKE name)
         SET_TARGET_PROPERTIES(${SWIG_MODULE_runtime_swig_REAL_NAME} PROPERTIES DEFINE_SYMBOL "gnuradio_runtime_EXPORTS")
     endif(${name} STREQUAL "runtime_swig")
 
+    endif (NOSWIG)
 endmacro(GR_SWIG_MAKE)
 
 ########################################################################
@@ -187,6 +191,8 @@ endmacro(GR_SWIG_MAKE)
 # )
 ########################################################################
 macro(GR_SWIG_INSTALL)
+    if (NOSWIG)
+    else (NOSWIG)
 
     include(CMakeParseArgumentsCopy)
     CMAKE_PARSE_ARGUMENTS(GR_SWIG_INSTALL "" "DESTINATION;COMPONENT" "TARGETS" ${ARGN})
@@ -210,6 +216,7 @@ macro(GR_SWIG_INSTALL)
 
     endforeach(name)
 
+    endif (NOSWIG)
 endmacro(GR_SWIG_INSTALL)
 
 ########################################################################
