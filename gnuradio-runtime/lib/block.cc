@@ -240,6 +240,14 @@ namespace gr {
   uint64_t
   block::nitems_read(unsigned int which_input)
   {
+    #ifdef POTHOS_SUPPORT
+    Pothos::Block *b = extractPothosBlock(this);
+    if (b != nullptr)
+    {
+        auto inputPort = b->input(which_input);
+        return inputPort->totalElements();
+    }
+    #endif
     if(d_detail) {
       return d_detail->nitems_read(which_input);
     }
@@ -252,6 +260,14 @@ namespace gr {
   uint64_t
   block::nitems_written(unsigned int which_output)
   {
+    #ifdef POTHOS_SUPPORT
+    Pothos::Block *b = extractPothosBlock(this);
+    if (b != nullptr)
+    {
+        auto outputPort = b->output(which_output);
+        return outputPort->totalElements();
+    }
+    #endif
     if(d_detail) {
       return d_detail->nitems_written(which_output);
     }
