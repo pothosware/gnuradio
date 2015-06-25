@@ -267,3 +267,21 @@ Pothos::Object pmt_to_obj(const pmt::pmt_t &p)
     //backup plan... store the pmt
     return Pothos::Object(p);
 }
+
+/***********************************************************************
+ * Register conversions for Pothos::Object conversion support:
+ * We could register support additional conversions but this should
+ * allow for PMTs to be used as input parameters for most types.
+ **********************************************************************/
+#include <Pothos/Plugin.hpp>
+#include <Pothos/Callable.hpp>
+
+pothos_static_block(pothosObjectRegisterPMTSupport)
+{
+    Pothos::PluginRegistry::add("/object/convert/gr/bool_to_pmt", Pothos::Callable(&pmt::from_bool));
+    Pothos::PluginRegistry::add("/object/convert/gr/string_to_pmt", Pothos::Callable(&pmt::string_to_symbol));
+    Pothos::PluginRegistry::add("/object/convert/gr/long_to_pmt", Pothos::Callable(&pmt::from_long));
+    Pothos::PluginRegistry::add("/object/convert/gr/uint64_to_pmt", Pothos::Callable(&pmt::from_uint64));
+    Pothos::PluginRegistry::add("/object/convert/gr/double_to_pmt", Pothos::Callable(&pmt::from_double));
+    Pothos::PluginRegistry::add("/object/convert/gr/complex_to_pmt", Pothos::Callable::make<const std::complex<double> &>(&pmt::from_complex));
+}
