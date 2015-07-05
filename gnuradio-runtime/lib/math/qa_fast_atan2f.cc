@@ -30,10 +30,12 @@
 #include <cmath>
 #include <limits>
 
+#if __cplusplus < 201103L
 #ifdef _MSC_VER
 #define isnan _isnan
 #else
 using std::isnan;
+#endif
 #endif
 
 void
