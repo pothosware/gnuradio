@@ -385,6 +385,13 @@ namespace gr {
           goto try_again;
         }
 
+        //Insufficient available, set a reserve for the bare minimum:
+        //This may cause buffer accumulation when discontinuous,
+        //but we would otherwise get stuck without doing so.
+        m->forecast (m->output_multiple(), d_ninput_items_required);
+        for(i = 0; i < d->inputs().size(); i++)
+            d->input(i)->setReserve(d_ninput_items_required[i]);
+
         // We're blocked on input
         LOG(*d_log << "  BLKD_IN\n");
         if(d_input_done[i])   // If the upstream block is done, we're done
