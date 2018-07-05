@@ -128,7 +128,7 @@ bool usrp_block_impl::_wait_for_locked_sensor(
 
   while (true) {
     if ((not first_lock_time.is_not_a_date_time()) and
-        (boost::get_system_time() > (first_lock_time + boost::posix_time::seconds(LOCK_TIMEOUT)))) {
+        (boost::get_system_time() > (first_lock_time + boost::posix_time::milliseconds(long(LOCK_TIMEOUT*1000))))) {
       break;
     }
 
@@ -139,7 +139,7 @@ bool usrp_block_impl::_wait_for_locked_sensor(
     else {
       first_lock_time = boost::system_time(); //reset to 'not a date time'
 
-      if (boost::get_system_time() > (start + boost::posix_time::seconds(LOCK_TIMEOUT))){
+      if (boost::get_system_time() > (start + boost::posix_time::milliseconds(long(LOCK_TIMEOUT*1000)))){
         return false;
       }
     }
